@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<!--
+  The entry point for the Vite app. Vite reads this file and injects the
+  compiled React bundle. You only touch this file if you need to change
+  the page title, add a favicon, or load a font.
+-->
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>React Fundamentals Playground — §03</title>
+  </head>
+  <body>
+    <!--
+      React mounts the entire app into this single div.
+      main.tsx calls ReactDOM.createRoot(document.getElementById("root")).render(...)
+      After that, React owns this DOM node completely.
+    -->
+    <div id="root"></div>
+
+    <!--
+      Vite replaces this script tag at build time with the compiled bundle.
+      type="module" = uses ES Modules (import/export), not old-style scripts.
+    -->
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

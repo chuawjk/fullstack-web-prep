@@ -1,0 +1,85 @@
+// Prisma schema file — defines the data models (tables) and the database connection.
+//
+// After editing this file:
+//   npx prisma migrate dev --name <description>    → creates a migration + updates DB
+//   npx prisma generate                             → regenerates the TypeScript client
+//
+// Python analogy: SQLAlchemy models + Alembic migrations, but the client code
+// is auto-generated from the schema instead of hand-written.
+
+// The `generator` block tells Prisma to generate a TypeScript/JavaScript client.
+generator client {
+  provider = "prisma-client-js"
+}
+
+// The `datasource` block configures the database connection.
+// "sqlite" = SQLite (a single file database — perfect for local dev, no setup needed).
+// For production, swap "sqlite" for "postgresql" and update the DATABASE_URL.
+datasource db {
+  provider = "sqlite"
+  url      = "file:./dev.db"  // the SQLite file lives next to this schema
+}
+
+// === MODELS ==================================================================
+// A `model` becomes a table in the database. Each field becomes a column.
+// Prisma generates fully-typed CRUD methods from these — no SQL needed.
+
+model User {
+  // @id marks the primary key. @default(cuid()) auto-generates a short unique ID.
+  // Python/SQLAlchemy: Column(String, primary_key=True, default=generate_id)
+  id          String   @id @default(cuid())
+  email       String   @unique          // @unique → UNIQUE constraint in the DB
+  displayName String
+  passwordHash String                   // stored as a bcrypt hash, never plaintext
+  createdAt   DateTime @default(now())  // @default(now()) = current timestamp on insert
+
+  // RELATIONS: one User has many Sessions, many Messages, many Conversations.
+  // Prisma uses these to generate join queries and type the results.
+  // Python/SQLAlchemy: relationship("Session", back_populates="user")
+  sessions      Session[]
+  messages      Message[]
+  conversations Conversation[]
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  token     String   @unique             // the session token stored in the cookie
+  userId    String                       // foreign key
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  // @relation links this field to the User model via the userId foreign key.
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  // onDelete: Cascade → if the User is deleted, all their Sessions are too.
+}
+
+model Conversation {
+  id        String   @id @default(cuid())
+  title     String?                      // ? = nullable (the column allows NULL)
+  userId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt          // @updatedAt auto-updates on every save
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  Message[]
+}
+
+model Message {
+  id             String       @id @default(cuid())
+  content        String
+  // role uses an ENUM — in SQLite stored as a string; in Postgres as an actual enum.
+  role           MessageRole
+  userId         String
+  conversationId String
+  createdAt      DateTime     @default(now())
+
+  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+}
+
+// Enum: restricts the `role` column to these exact values.
+// TypeScript: type Role = "user" | "assistant" (same concept, different syntax).
+enum MessageRole {
+  user
+  assistant
+}

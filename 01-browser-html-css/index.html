@@ -1,0 +1,79 @@
+<!doctype html>
+<!--
+  This is an HTML file. HTML describes the STRUCTURE of a page: what elements
+  exist and how they nest. It is not a programming language — there are no
+  variables or loops. Think of it as the skeleton that CSS dresses and
+  JavaScript animates.
+
+  <!DOCTYPE html> just tells the browser "this is modern HTML". Always present,
+  rarely thought about.
+-->
+<html lang="en">
+  <head>
+    <!--
+    <head> holds METADATA — information ABOUT the page that isn't shown inside
+    it. The browser reads this before rendering anything visible.
+  -->
+    <meta charset="UTF-8" />
+    <!-- viewport: makes the page size correctly on phones. Standard boilerplate. -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Chat — Section 01</title>
+
+    <!--
+    This loads our CSS file. HTML (structure) and CSS (appearance) are kept in
+    separate files on purpose: change how it looks without touching structure.
+  -->
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+
+  <body>
+    <!--
+    <body> holds everything VISIBLE. The tags below are "semantic" — their names
+    describe their ROLE, not their appearance. <header> means "this is a header"
+    no matter how it's styled. Semantic tags help screen readers, search engines,
+    and the next developer who reads your code.
+  -->
+
+    <header>
+      <h1>Chat</h1>
+      <!-- <h1> is the main heading. One per page, by convention. -->
+    </header>
+
+    <!-- <main> = the primary content of the page. -->
+    <main>
+      <!--
+      A container holding chat messages. <div> is a generic box with no meaning
+      of its own — used purely for grouping and styling.
+
+      "class" and "id" are LABELS we attach so CSS and JavaScript can find
+      elements. id is unique (one per page); class can repeat. Python-ish
+      mental model: id is a primary key, class is a tag you can reuse.
+    -->
+      <div id="messages" class="messages">
+        <div class="message message--bot">Hi! Ask me anything.</div>
+        <div class="message message--user">What is the DOM?</div>
+      </div>
+
+      <!--
+      The composer row: a text box + a button. We are deliberately NOT using a
+      <form> here. Forms have special submit behaviour (they reload the page)
+      that we'll cover later; a plain input + button keeps the JS easy to follow.
+    -->
+      <div class="composer">
+        <input
+          id="input"
+          class="composer__input"
+          type="text"
+          placeholder="Type a message…"
+        />
+        <button id="send" class="composer__send">Send</button>
+      </div>
+    </main>
+
+    <!--
+    Load JavaScript LAST, right before </body>. By now every element above
+    already exists in the page, so the script can reliably find them.
+  -->
+    <script src="dom-and-events.js"></script>
+  </body>
+</html>

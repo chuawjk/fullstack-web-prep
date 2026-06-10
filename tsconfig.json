@@ -1,0 +1,61 @@
+{
+  // Shared TypeScript configuration for the standalone .ts example files
+  // in sections 02, 06, 07, and 08.
+  //
+  // The React playground (03/) and Next.js project (10/) have their own
+  // tsconfig.json files because they need JSX settings.
+  //
+  // Python parallel: this is like a pyproject.toml for mypy — it controls
+  // how the type checker interprets your code.
+  "compilerOptions": {
+    // ── Output ──────────────────────────────────────────────────────────────
+    // We use `tsx` to run files directly, so we don't need tsc to emit JS.
+    // `noEmit: true` means "type-check only; don't write any output files."
+    "noEmit": true,
+
+    // ── Module system ───────────────────────────────────────────────────────
+    // Node16: tells TS to use Node.js 16+ module resolution rules.
+    // This handles both CommonJS (require) and ESM (import) correctly.
+    "module": "Node16",
+    "moduleResolution": "Node16",
+
+    // ── Compilation target ──────────────────────────────────────────────────
+    // "ES2022" means "assume the JS runtime supports up to ES2022 features."
+    // Node 22 supports all of these — no polyfills needed.
+    "target": "ES2022",
+
+    // ── Strictness ──────────────────────────────────────────────────────────
+    // "strict: true" enables a bundle of safety checks. Most importantly:
+    //   - strictNullChecks: null and undefined are NOT valid everywhere
+    //   - noImplicitAny: every value must have a known type (no silent `any`)
+    // If you've used mypy with --strict, this is the equivalent.
+    "strict": true,
+
+    // ── Extra safety flags ──────────────────────────────────────────────────
+    // ── JSX ─────────────────────────────────────────────────────────────────
+    // "react-jsx" uses the modern automatic JSX transform (no need to import
+    // React in every file). Not needed for plain .ts files, but harmless.
+    "jsx": "react-jsx",
+
+    // ── Library types ───────────────────────────────────────────────────────
+    // Include the Node.js and browser type definitions.
+    "lib": ["ES2022", "DOM"],
+
+    // ── Interop ─────────────────────────────────────────────────────────────
+    // Allow importing CommonJS modules with `import x from 'x'` syntax.
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true
+  },
+  "include": [
+    "02-typescript/**/*.ts",
+    "06-backend-node-express-prisma/**/*.ts",
+    "07-auth/**/*.ts",
+    "08-testing/**/*.ts",
+    "08-testing/**/*.tsx"
+  ],
+  "exclude": [
+    "node_modules",
+    "03-react-fundamentals/playground",
+    "10-project-chatbot"
+  ]
+}

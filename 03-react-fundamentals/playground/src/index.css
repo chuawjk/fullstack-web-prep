@@ -1,0 +1,11 @@
+/*
+  Tailwind's three directive layers:
+    @tailwind base     → resets browser default styles (removes margins, normalises fonts)
+    @tailwind components → any @layer components {} blocks from plugins or your config
+    @tailwind utilities → generates all the utility classes (flex, p-4, text-sm, etc.)
+
+  This file is imported in main.tsx — Vite + PostCSS process it at build time.
+*/
+@tailwind base;
+@tailwind components;
+@tailwind utilities;

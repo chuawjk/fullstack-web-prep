@@ -1,0 +1,103 @@
+/*
+  CSS controls APPEARANCE. It's a list of RULES. Each rule has:
+    a SELECTOR   → what to style  (e.g. "body", ".message", "#input")
+    DECLARATIONS → property: value pairs inside { } (e.g. "color: white;")
+
+  Selector cheatsheet:
+    body        → the <body> element (by tag name)
+    .message    → any element with class="message"   (leading dot = class)
+    #input      → the element with id="input"         (leading hash = id)
+
+  There's no real Python equivalent. Read it as: "any element matching this
+  selector gets these visual properties."
+*/
+
+body {
+  font-family: system-ui, sans-serif; /* use the operating system's UI font */
+  margin: 0; /* browsers add default margin; remove it */
+  background: #f3f4f6;
+}
+
+/*
+  ===== THE BOX MODEL — the single most important CSS idea =====
+  Every element is a rectangular box with four layers, from inside out:
+    content  → the text or inner elements
+    padding  → space INSIDE the box, between content and border
+    border   → a line around the padding
+    margin   → space OUTSIDE the box, pushing neighbours away
+  Understand these four words and you can read most layout code.
+*/
+
+header {
+  background: #111827;
+  color: white;
+  padding: 16px 24px; /* INSIDE spacing: 16px top/bottom, 24px left/right */
+}
+
+header h1 {
+  /* a "descendant" selector: an <h1> inside a <header> */
+  margin: 0; /* headings have default margin; remove it */
+  font-size: 20px;
+}
+
+main {
+  /*
+    ===== FLEXBOX — a layout system =====
+    "display: flex" makes an element a flex CONTAINER. Its direct children
+    become flex ITEMS that line up along one axis. We stack them vertically.
+  */
+  display: flex;
+  flex-direction: column;
+  max-width: 600px;
+  margin: 24px auto; /* top/bottom 24px; "auto" left/right CENTRES the block */
+  gap: 160px; /* space BETWEEN flex items */
+}
+
+.messages {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.message {
+  padding: 10px 14px; /* inner spacing is what makes the "bubble" shape */
+  border-radius: 12px; /* rounded corners */
+  max-width: 75%;
+}
+
+/*
+  The "--bot" / "--user" suffix is just a NAMING CONVENTION (called BEM) signalling
+  "variant of .message". CSS treats "--" as ordinary characters — it's all one
+  class name. The convention is for humans, not the browser.
+*/
+.message--bot {
+  background: #e5e7eb;
+  align-self: flex-start; /* sit at the START of the row → left side */
+}
+
+.message--user {
+  background: #2563eb;
+  color: white;
+  align-self: flex-end; /* sit at the END → right side */
+}
+
+.composer {
+  display: flex; /* children side by side (row is the default axis) */
+  gap: 8px;
+}
+
+.composer__input {
+  flex: 1; /* GROW to fill the leftover space */
+  padding: 10px 12px;
+  border: 1px solid #d1d5db; /* border shorthand: width style colour */
+  border-radius: 8px;
+}
+
+.composer__send {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  background: #2563eb;
+  color: white;
+  cursor: pointer; /* show the hand cursor on hover */
+}

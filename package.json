@@ -1,0 +1,44 @@
+{
+  "name": "fullstack-web-prep",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Full-stack web dev learning repo — TypeScript, React, Node, Express, Prisma, auth, testing",
+  "scripts": {
+    "02:01": "tsx 02-typescript/01-types.ts",
+    "02:02": "tsx 02-typescript/02-interfaces-and-types.ts",
+    "02:03": "tsx 02-typescript/03-generics.ts",
+    "02:04": "tsx 02-typescript/04-narrowing.ts",
+    "02:05": "tsx 02-typescript/05-utility-types.ts",
+    "03:playground": "cd 03-react-fundamentals/playground && npm run dev",
+    "06:server": "tsx 06-backend-node-express-prisma/express-server.ts",
+    "06:queries": "tsx 06-backend-node-express-prisma/prisma-queries.ts",
+    "07:sessions": "tsx 07-auth/sessions-from-scratch.ts",
+    "07:cookies": "tsx 07-auth/cookies.ts",
+    "08:test": "vitest run 08-testing"
+  },
+  "devDependencies": {
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@testing-library/jest-dom": "^6.4.0",
+    "@testing-library/react": "^16.0.0",
+    "@testing-library/user-event": "^14.5.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "jsdom": "^24.1.0",
+    "prettier": "^3.3.0",
+    "prisma": "^5.15.0",
+    "tsx": "^4.15.0",
+    "typescript": "^5.4.0",
+    "vitest": "^1.6.0"
+  },
+  "prisma": {
+    "schema": "06-backend-node-express-prisma/schema.prisma"
+  },
+  "dependencies": {
+    "@prisma/client": "^5.15.0",
+    "express": "^4.19.0",
+    "openai": "^4.52.0",
+    "zod": "^3.23.0"
+  }
+}

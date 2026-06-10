@@ -1,0 +1,105 @@
+{
+  "name": "Fullstack Web Prep",
+
+  // Base image: Debian + Node.js 22 LTS + TypeScript pre-installed.
+  // Maintained by Microsoft's devcontainers team — updated regularly.
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:22",
+
+  // VSCode extensions to auto-install inside the container.
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        // TypeScript & JS language support (enhanced beyond the built-in)
+        "ms-vscode.vscode-typescript-next",
+
+        // ESLint — surfaces linting errors inline as you type
+        "dbaeumer.vscode-eslint",
+
+        // Prettier — auto-formats on save (wired up in settings below)
+        "esbenp.prettier-vscode",
+
+        // Prisma — syntax highlighting + auto-complete for .prisma schema files
+        "Prisma.prisma",
+
+        // Tailwind CSS IntelliSense — auto-complete for Tailwind class names
+        "bradlc.vscode-tailwindcss",
+
+        // Error Lens — surfaces errors/warnings inline on the offending line
+        "usernamehw.errorlens",
+
+        // GitLens — enriches git blame, history, and diff views
+        "eamodio.gitlens",
+
+        // Vitest explorer — run/debug individual Vitest tests from the sidebar
+        "vitest.explorer",
+
+        // REST Client — send HTTP requests from a .http file; useful for §06 backend
+        "humao.rest-client"
+      ],
+
+      "settings": {
+        // Use Prettier as the default formatter for all supported file types
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true,
+
+        // Show ESLint status in the bottom bar
+        "eslint.validate": ["javascript", "javascriptreact", "typescript", "typescriptreact"],
+
+        // Tailwind: also activate inside JSX/TSX class strings
+        "tailwindCSS.includeLanguages": {
+          "typescriptreact": "html"
+        },
+
+        // Show TypeScript errors without needing to open a terminal
+        "typescript.tsdk": "node_modules/typescript/lib",
+
+        // File nesting — groups related files (e.g. tsconfig.json under package.json)
+        "explorer.fileNesting.enabled": true,
+        "explorer.fileNesting.patterns": {
+          "package.json": "package-lock.json, yarn.lock, pnpm-lock.yaml, .npmrc",
+          "tsconfig.json": "tsconfig.*.json",
+          ".env": ".env.*"
+        }
+      }
+    }
+  },
+
+  // Forward these ports from the container to your host browser:
+  //   5173  — Vite dev server (§03 React playground, standalone Vite apps)
+  //   3000  — Next.js dev server (§10 chatbot project)
+  //   3001  — Express API server (§06 backend)
+  "forwardPorts": [5173, 3000, 3001],
+  "portsAttributes": {
+    "5173": { "label": "Vite (React playground)", "onAutoForward": "notify" },
+    "3000": { "label": "Next.js (chatbot)", "onAutoForward": "notify" },
+    "3001": { "label": "Express API", "onAutoForward": "notify" }
+  },
+
+  // Pass API keys from your host environment into the container automatically.
+  // Set these on your Mac with:  export OPENAI_API_KEY=sk-...
+  // Then rebuild the container — the keys will be available as env vars inside.
+  // Never hard-code keys; never commit a .env file with real values.
+  "remoteEnv": {
+    "OPENAI_API_KEY": "${localEnv:OPENAI_API_KEY}",
+    "ANTHROPIC_API_KEY": "${localEnv:ANTHROPIC_API_KEY}"
+  },
+
+  // Commands that run once after the container is created (not on every start).
+  // Install global CLI tools that the section scripts expect on PATH.
+  "postCreateCommand": {
+    // tsx: runs TypeScript files directly without a separate compile step.
+    //      Equivalent to running `python my_script.py` — no build step needed.
+    //      Used in §02–§08 to run standalone .ts example files.
+    // @anthropic-ai/claude-code: the Claude Code CLI so you can drive repo
+    //      generation from *inside* the container, as intended.
+    // sqlite3 CLI — inspect the Prisma dev DB directly (apt package, always available on Debian)
+    "install-sqlite3": "sudo apt-get update -qq && sudo apt-get install -y -qq sqlite3",
+    // tsx: run .ts files directly (like `python script.py` but for TypeScript)
+    // @anthropic-ai/claude-code: Claude Code CLI for driving repo generation inside the container
+    "install-globals": "npm install -g tsx @anthropic-ai/claude-code"
+  },
+
+  // Run as the non-root 'node' user that the base image provides.
+  // Good practice — avoids file permission issues on bind-mounted source.
+  "remoteUser": "node"
+}
