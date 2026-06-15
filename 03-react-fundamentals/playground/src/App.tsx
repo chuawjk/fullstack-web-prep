@@ -28,12 +28,21 @@ export default function App() {
   // When setActiveDemo is called, React re-renders App and all its children.
   const [activeDemo, setActiveDemo] = useState<Demo>("chat");
 
+  // Watch the console: App re-renders only when activeDemo changes (clicking a
+  // tab). Typing inside a demo re-renders the demo, not App.
+  console.log("🔁 render App — activeDemo:", activeDemo);
+
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Header */}
       <header className="bg-gray-900 text-white px-6 py-4">
-        <h1 className="text-xl font-semibold">§03 React Fundamentals Playground</h1>
-        <p className="text-gray-400 text-sm mt-1">Click a tab to switch between demos. Edit the code and watch the browser update.</p>
+        <h1 className="text-xl font-semibold">
+          §03 React Fundamentals Playground
+        </h1>
+        <p className="text-gray-400 text-sm mt-1">
+          Click a tab to switch between demos. Edit the code and watch the
+          browser update.
+        </p>
       </header>
 
       {/* Tab navigation */}
@@ -41,11 +50,22 @@ export default function App() {
         {DEMOS.map(({ key, label }) => (
           <button
             key={key}
-            onClick={() => setActiveDemo(key)}
+            onClick={() => {
+              // Switching tabs swaps which demo is rendered. The old demo
+              // UNMOUNTS (its effect cleanups run) and the new one MOUNTS —
+              // watch the 🧹 cleanup / ✅ effect logs when you leave the
+              // useEffect tab mid-timer.
+              console.log(
+                "🖱️ event switch tab →",
+                key,
+                "(old demo unmounts, new mounts)",
+              );
+              setActiveDemo(key);
+            }}
             className={`px-4 py-2 text-sm font-medium rounded-t-md transition-colors ${
               activeDemo === key
-                ? "bg-blue-600 text-white"        // active tab
-                : "text-gray-600 hover:bg-gray-100"  // inactive tab
+                ? "bg-blue-600 text-white" // active tab
+                : "text-gray-600 hover:bg-gray-100" // inactive tab
             }`}
           >
             {label}

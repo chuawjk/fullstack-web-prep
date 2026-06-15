@@ -9,6 +9,7 @@
     "02:03": "tsx 02-typescript/03-generics.ts",
     "02:04": "tsx 02-typescript/04-narrowing.ts",
     "02:05": "tsx 02-typescript/05-utility-types.ts",
+    "03:model": "tsx 03-react-fundamentals/notes/mental-model.ts",
     "03:playground": "cd 03-react-fundamentals/playground && npm run dev",
     "06:server": "tsx 06-backend-node-express-prisma/express-server.ts",
     "06:queries": "tsx 06-backend-node-express-prisma/prisma-queries.ts",

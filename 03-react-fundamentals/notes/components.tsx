@@ -1,32 +1,41 @@
 /*
-  A COMPONENT is a function that returns JSX — a description of what to render.
-  React calls your function, takes the returned JSX, and turns it into DOM nodes.
+  A component is a function that returns JSX — the description React turns into
+  DOM. React calls your function for you (see notes/mental-model.ts); you never
+  call it directly. It re-calls automatically whenever the component's state or
+  props change.
 
-  Python analogy: a function that accepts data and returns a description of output.
-  But unlike a Python print function, React re-calls it automatically whenever
-  the component's state or props change.
+  Python analogy: a function that takes data and returns a description of output —
+  except React decides when to run it, and runs it again on every change.
 
-  This file is a READ-FIRST reference. It's not a standalone runnable file —
-  see playground/ for the live app.
+  READING GUIDE for this whole folder:
+    • `function Thing() { ... }`     is a DEFINITION — what the component is.
+    • `<Thing />` inside another      is a CALL SITE — a description that tells
+      component's returned JSX         React "call Thing here". It is NOT you
+                                       calling Thing; React makes the call.
+  Definitions and call sites are labelled below so the two never blur together.
+
+  This file is a READ-FIRST reference, not a runnable — see playground/ for the
+  live app.
 */
 
 import React from "react";
 
-// === THE SIMPLEST COMPONENT ===================================================
+// === Definition: the simplest component =======================================
 // A component is just a function that returns JSX (the HTML-like syntax).
-// The function name MUST start with a capital letter — React uses this to
-// distinguish components (capital) from plain HTML tags (lowercase).
+// Its name MUST start with a capital letter — React uses the capital to tell a
+// component (<Greeting/>) apart from a plain HTML tag (<div/>).
 
 function Greeting() {
-  // JSX: this looks like HTML but it's actually JavaScript function calls.
-  // <h1>Hello!</h1>  compiles to  React.createElement("h1", null, "Hello!")
-  // There's no direct Python equivalent for JSX — it's syntax sugar for function calls.
+  // JSX looks like HTML but compiles to function calls:
+  //   <h1>Hello!</h1>  →  React.createElement("h1", null, "Hello!")
+  // No Python equivalent — it's syntax sugar for those createElement calls.
   return <h1>Hello!</h1>;
 }
 
-// === COMPONENT WITH DYNAMIC DATA ==============================================
-// Curly braces {} inside JSX switch back to "JavaScript mode".
-// Python f-string equivalent: {variable}  inside an f"..." string.
+// === Definition: a component with dynamic data ================================
+// Curly braces {} inside JSX drop back into "JavaScript mode" to evaluate an
+// expression and insert the result. (Python's nearest cousin is {x} inside an
+// f-string — but JSX inserts the value, not necessarily a string.)
 
 interface WelcomeProps {
   username: string;
@@ -35,20 +44,19 @@ interface WelcomeProps {
 function Welcome({ username }: WelcomeProps) {
   const greeting = `Welcome back, ${username}!`;
   return (
-    // Parentheses around multi-line JSX — purely for formatting; no semantic meaning.
+    // Parentheses around multi-line JSX are formatting only — no meaning.
     <div className="welcome-banner">
-      {/* This is a JSX comment — curly braces + /* */}
+      {/* This is a JSX comment. */}
       <h2>{greeting}</h2>
       <p>You have new messages.</p>
     </div>
   );
-  // Note: className instead of class — "class" is a reserved word in JavaScript.
-  // React maps className → the HTML class attribute.
+  // className, not class — "class" is a reserved word in JS, so React renames it.
 }
 
-// === COMPOSING COMPONENTS =====================================================
-// Components nest inside each other, forming the component tree.
-// The parent renders children by using them like HTML tags.
+// === Definition: composing components =========================================
+// Components nest inside each other to form the component tree. A parent uses a
+// child by writing it like a tag — that tag is a CALL SITE for the child.
 
 interface Message {
   id: string;
@@ -57,11 +65,13 @@ interface Message {
 }
 
 function MessageBubble({ role, content }: { role: string; content: string }) {
-  // Inline style — a JavaScript object where CSS property names are camelCase.
-  // Python: there's no equivalent; this is React-specific.
+  // role === "user" ? A : B   is a ternary — JS's inline if/else.
+  // Python: A if role == "user" else B   (note the different word order).
   const bgColor = role === "user" ? "#2563eb" : "#e5e7eb";
   const textColor = role === "user" ? "white" : "black";
 
+  // style takes a JS object; the double braces are { (JS mode) + { (the object) }.
+  // CSS property names become camelCase: background-color → backgroundColor.
   return (
     <div style={{ background: bgColor, color: textColor, padding: "10px 14px", borderRadius: "12px" }}>
       {content}
@@ -75,11 +85,16 @@ function ChatView() {
     { id: "2", role: "assistant", content: "Hi there!" },
   ];
 
-  // Renders two MessageBubble components nested inside a div.
-  // Each <MessageBubble ... /> is a call to the MessageBubble function.
   return (
     <div>
+      {/* CALL SITE: a description telling React to call Welcome (defined above)
+          with username="alice". You are not calling Welcome here. */}
       <Welcome username="alice" />
+
+      {/* CALL SITE x N: .map turns each Message into a <MessageBubble/>
+          description — React then calls MessageBubble once per message.
+          Python: [MessageBubble(...) for msg in messages]. `key` is identity
+          metadata for React's diffing, not a prop MessageBubble receives. */}
       {messages.map(msg => (
         <MessageBubble key={msg.id} role={msg.role} content={msg.content} />
       ))}
@@ -87,10 +102,10 @@ function ChatView() {
   );
 }
 
-// === FRAGMENTS ================================================================
-// React components must return ONE root element. If you don't want an extra
-// <div> wrapper, use a Fragment — it renders nothing in the DOM.
-// Python: there's no equivalent; this is a React-specific constraint.
+// === Definition: fragments ====================================================
+// A component must return ONE root element. When you don't want a real wrapping
+// <div> in the DOM (it can break flexbox/grid or invalid table/list nesting),
+// wrap the siblings in a Fragment — it groups them but renders nothing itself.
 
 function TwoThings() {
   return (

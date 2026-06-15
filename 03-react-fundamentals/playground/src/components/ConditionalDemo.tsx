@@ -28,15 +28,22 @@ export function ConditionalDemo() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [showTimestamps, setShowTimestamps] = useState(false);
 
+  // loadState drives which branch of JSX renders. Watch it walk the state
+  // machine: idle → loading → (success | error).
+  console.log("🔁 render ConditionalDemo — loadState:", loadState);
+
   function simulateLoad(willSucceed: boolean) {
+    console.log("🖱️ event simulateLoad → loading");
     setLoadState("loading");
     setMessages([]);
 
     setTimeout(() => {
       if (willSucceed) {
+        console.log("⏱️ load resolved → success");
         setMessages(MOCK_MESSAGES);
         setLoadState("success");
       } else {
+        console.log("⏱️ load failed → error");
         setLoadState("error");
       }
     }, 1500);
@@ -69,7 +76,10 @@ export function ConditionalDemo() {
           {/* && pattern: only show toggle button when we have messages */}
           {loadState === "success" && (
             <button
-              onClick={() => setShowTimestamps(v => !v)}
+              onClick={() => {
+                console.log("🖱️ event toggle timestamps — flips the && condition");
+                setShowTimestamps(v => !v);
+              }}
               className="bg-gray-100 text-gray-700 px-3 py-1.5 rounded-lg text-sm hover:bg-gray-200"
             >
               {showTimestamps ? "Hide" : "Show"} timestamps

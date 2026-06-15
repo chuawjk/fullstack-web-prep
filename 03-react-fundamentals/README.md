@@ -1,113 +1,192 @@
 # 03 — React Fundamentals
 
-**Objective:** read a React component cold and explain what it renders, what it fetches, and what triggers a re-render.
+**Objective:** read a React component cold and explain what it renders, what re-runs it, and what React does with the result.
 
-React is a JavaScript library for building UIs. Its core idea: **the UI is a function of state**. You describe *what* the screen should look like for a given piece of data, and React figures out *how* to update the DOM when that data changes. You never manually touch the DOM (no `appendChild` like in §01) — you describe the output, and React handles the rest.
+Most of what makes React confusing isn't the API — it's the _machine underneath_: how your code actually executes. `useState`, props, JSX, keys all become easy once you can see that machine. So this section teaches the machine first, in plain terms, and only then names the parts.
 
-Python parallel: think of a React component like a function that takes some data (props) and returns a description of a UI fragment. React calls that function whenever the data changes and updates the screen.
+> Coming from imperative Python, here's the one sentence that everything below unpacks: **you never run your UI code, and you never touch the screen.** You write functions that return descriptions, hand them to React, and React decides when to call them and what to change.
 
 ---
 
-## The component tree
+## How React runs
 
-React UIs are built from **components** nested inside other components. Every React app has one root, and the full UI is a tree of these components.
+Read these in order — each step leans on the one before it. The companion file `notes/mental-model.ts` builds a tiny working React engine that makes steps 1–7 concrete; run it (`npm run 03:model`) and keep its output beside this list.
+
+### 1. A piece of JSX is a value, not an action
+
+JSX isn't HTML and isn't a draw command. The compiler rewrites every tag into a `createElement(...)` call that returns a plain object. That object is called an **element** — a description of what should be on screen, not the thing on screen.
 
 ```
-App
-├── Header
-├── MessageList
-│   ├── Message (id="1")
-│   ├── Message (id="2")
-│   └── Message (id="3")
-└── ChatInput
-    ├── <input>
-    └── <button>Send</button>
+   JSX (what you write)             element (what it compiles to)
+   ─────────────────────           ─────────────────────────────────────
+   <p>Count: {count}</p>    ──►     { type: "p",
+                                      props: { children: ["Count: ", 0] } }
 ```
 
-Data flows **down** the tree as props. Events flow **up** via callback functions passed as props. State lives in the component that owns it (and can be shared downward).
+You can `console.log` an element. It's just data.
+
+### 2. A component is a function that returns a description
+
+A component takes `props` and **returns** an element tree. That's its whole job — it doesn't draw or change anything.
+
+```
+   props  ──►  Counter  ──►  element tree (a description)
+   { count: 0 }              { type: "div", props: { … } }
+```
+
+Like a Jinja template function that returns a description instead of rendering once.
+
+### 3. Data flows down; events flow up
+
+Props pass **down** the tree. A child can't reach up and change a parent's data — the parent passes a **callback** down, and the child calls it. That's the entire communication model.
+
+```
+                 App   (owns the state)
+                  │
+          props ↓ │ ↑ callbacks
+        ┌─────────┴─────────┐
+     Display              Button
+   value={count}    onClick={() => setCount(...)}
+```
+
+### 4. React calls your component — you don't
+
+This is the one that answers "wait, when does this even run?" You write `<Counter />`, which is just data naming the function (`createElement(Counter, props)` → `{ type: Counter, props }`). You hand that to React; **React** makes the actual `Counter(props)` call, at a time of its choosing. You never call a component yourself, and you never touch the DOM like you did in §01.
+
+```
+   YOU                          REACT                    BROWSER
+   ───                          ─────                    ───────
+   root.render(<Counter/>)  ─►  calls Counter()      ─►  React builds &
+   (hand over a                 (React is the            patches the DOM
+    description, once)           caller, repeatedly)     — not you)
+```
+
+Why does React want to own the call? So it can make that call _again_ automatically whenever the inputs change — which is what re-rendering is. Hand the call to React and updates become free; keep it yourself and you're back to wiring every update by hand. (The term for "the framework calls you, not the other way around" is **inversion of control**.)
+
+### 5. Rendering is cheap; only the changes touch the DOM
+
+A render happens in two passes. First React calls your functions and assembles the element tree in memory — just objects, fast. React calls this in-memory tree the **virtual DOM**. Then it applies the result to the real, slow browser DOM — and only the parts that changed. The names for the two passes are **render** (build the description) and **commit** (apply it).
+
+```
+   render (in memory, cheap)              commit (touches real DOM)
+   ─────────────────────────             ──────────────────────────
+   call components → element tree   ──►   compare to previous   ──►   patch only the delta
+```
+
+### 6. Changing state re-runs the function
+
+State is data that survives between renders and, when changed, triggers a new render. The governing idea: `UI = f(state)`. Change state → React re-calls `f` → compares → patches.
+
+```
+   setCount(1)  ──►  React re-runs Counter()  ──►  compare  ──►  patch one text node
+```
+
+`useState` is just how a function remembers a value between calls and gets a setter that also schedules the re-run. (CLAUDE.md's anchor: a class attribute whose setter also calls `self.redraw()`.)
+
+### 7. A re-render is literally another function call
+
+The part that fights imperative habits, so go slow. `setCount(1)` does **not** mutate `count` — `count` is a `const`, frozen for the life of that one call. `setCount` schedules React to **call the component again**, a brand-new call with a brand-new local `count`.
+
+```
+   call #0  (first render)           call #1  (after setCount)
+   ────────────────────              ─────────────────────────
+   count = 0   (a const)             count = 1   (a different const)
+   returns <p>Count: 0</p>           returns <p>Count: 1</p>
+
+   setCount didn't change count. It asked React to run the function again.
+   The screen is a slideshow of frames, not a document you edit in place.
+```
+
+### 8. Lists need stable identity (keys)
+
+When you render a list, React matches old elements to new ones to decide what to reuse. By default it matches by position, which breaks when items reorder or get inserted. A **key** gives each item a stable identity so React tracks it correctly — that's why it warns when keys are missing.
+
+```
+   old:  div > p > ["Count: ", 0]
+   new:  div > p > ["Count: ", 1]
+                               ▲
+                  only this text node differs  →  React updates it,
+                  reuses the <div>, <p>, <button>, and listeners
+```
+
+### 9. Effects reach the world outside the loop
+
+Steps 1–8 are React's closed loop: state → render → commit. An **effect** is the escape hatch for anything that _isn't_ "compute UI from state" — network calls, timers, subscriptions. It runs _after_ commit, and its cleanup runs before the next effect or on unmount.
+
+```
+   state change ─► render ─► commit ─► [ effect runs ] ─► … later: [ cleanup ]
+                                            │
+                                   fetch / timers / subscriptions
+```
+
+`useEffect`'s dependency array just means "re-run this only when these values change."
+
+---
+
+## The whole thing in one sentence
+
+> A piece of JSX is data → a component is a function React calls → changing state makes React call it again → React compares the new description to the old → and patches only the difference. Effects let you step outside that loop to touch the world.
+
+Everything else in React — context, reducers, memoization, Suspense — only changes _where state lives_ or _when the function re-runs_. The loop never changes.
 
 ---
 
 ## Files, in reading order
 
-### Read first (`notes/`)
+| Order | File                              | Run it?            | What it grounds                                                |
+| ----- | --------------------------------- | ------------------ | -------------------------------------------------------------- |
+| 1     | `notes/mental-model.ts`           | `npm run 03:model` | The whole loop above, as a 70-line engine you can read and run |
+| 2     | `notes/components.tsx`            | read               | Components, JSX, rendering (steps 1–2)                         |
+| 3     | `notes/props.tsx`                 | read               | Data down, events up (step 3)                                  |
+| 4     | `notes/state-usestate.tsx`        | read               | State and re-running (steps 6–7)                               |
+| 5     | `notes/lists-and-conditional.tsx` | read               | Keys and matching (step 8)                                     |
+| 6     | `notes/effects-useeffect.tsx`     | read               | Effects and cleanup (step 9)                                   |
 
-These files are annotated reference material — read them with the comments as your guide. They use React but aren't standalone runnables; they exist to explain one concept each.
-
-| Order | File | What it teaches |
-|---|---|---|
-| 1 | `notes/components.tsx` | What a component is; JSX; rendering |
-| 2 | `notes/props.tsx` | Passing data down the tree |
-| 3 | `notes/state-usestate.tsx` | `useState` — mutable local state |
-| 4 | `notes/effects-useeffect.tsx` | `useEffect` — side effects + cleanup |
-| 5 | `notes/lists-and-conditional.tsx` | Rendering lists with keys; conditional rendering |
-
-### Then run (`playground/`)
-
-One small Vite + Tailwind app where each concept above is a live, toggleable demo. Modify the code and watch the browser update instantly (Vite's hot module reload, like a live Python notebook).
+The `notes/*.tsx` files are read-first references (not standalone runnables) — they show the real API in context. The playground is where it comes alive.
 
 ---
 
-## How to run the playground
+## The playground
 
-From the **repo root** (installs deps on first run only):
+A small Vite + Tailwind app where each concept is a live, toggleable demo. Change code, watch the browser hot-reload (like `uvicorn --reload`, but frontend). This is where steps 6 and 9 finally _feel_ real — you can't fully internalise "state triggers a re-render" until you click a button and watch it happen.
 
 ```bash
 cd 03-react-fundamentals/playground && npm install && npm run dev
+# or, once deps are installed, from the repo root:
+npm run 03:playground          # http://localhost:5173
 ```
 
-Or via the root shortcut (runs dev server only, assumes deps already installed):
-
-```bash
-npm run 03:playground
-```
-
-Then open `http://localhost:5173` in your browser.
-
-**Vite** is the dev server + bundler — it serves your React app, watches files for changes, and pushes updates to the browser without a full reload. Think of it as the equivalent of `uvicorn --reload` for a Python web app, but for the frontend.
-
----
-
-## Key concepts to watch for
-
-**JSX** — the HTML-like syntax inside `.tsx` files. It looks like HTML but it's actually JavaScript function calls. `<Message text="hi" />` compiles to `React.createElement(Message, { text: "hi" })`. There's no Python equivalent.
-
-**Props** — the inputs to a component, passed as HTML-like attributes. Python analogy: function arguments.
-
-**State (`useState`)** — local mutable data owned by a component. When state changes, React re-renders that component (and its children). Python analogy: instance variables on a class, but mutation always goes through a setter.
-
-**Effect (`useEffect`)** — code that runs *after* the component renders, for side effects: fetching data, subscribing to a websocket, setting up a timer. Python analogy: a callback that fires after a state change.
-
-**Keys** — when rendering a list, each item needs a unique `key` prop so React can track which item changed. Python analogy: dictionary keys — they let you look up a specific item without scanning the whole list.
+**Vite** is the dev server + bundler — it serves the app, watches files, and pushes updates without a full reload.
 
 ---
 
 ## Read-and-modify exercises
 
-Make small changes in the playground and watch the browser update.
+Predict the outcome _before_ you run each one.
 
-1. In `src/App.tsx`, find the initial messages array and add a fourth message. Watch the list re-render.
-2. In `src/components/ChatInput.tsx`, change the placeholder text. Notice Vite updates the browser instantly.
-3. In `src/components/MessageList.tsx`, remove the `key` prop from the list item. Open the browser console — you'll see React's warning about missing keys. Add it back.
-4. In `src/components/ChatInput.tsx`, make the Send button disabled when the input is empty (hint: use the `disabled` prop on `<button>`).
-5. Add a "Clear chat" button to `App.tsx` that resets the messages array to empty.
+1. Before opening the playground, read `ChatDemo.tsx` and predict: when you type a character, does the component's function body run again, or does a value change in place? Then add `console.log("render", draft)` at the top of `ChatDemo` and type a few characters. Were you right?
+2. In `notes/mental-model.ts`, add a second `<p>` to `Counter` and re-run `npm run 03:model`. Find your new node in the printed object _before_ looking at the rendered string.
+3. In `playground/src/components/ListDemo.tsx`, add a fourth item to `INITIAL_MESSAGES`. Only one new DOM node should appear; the rest are reused — why?
+4. In the list demo, remove a `key` prop. Open the browser console, read React's warning, explain it in terms of "matching old elements to new," then restore it.
+5. In `ChatDemo.tsx`, add a "Clear chat" button that resets `messages` to `[]`. Narrate the sequence: which setter fires, which function re-runs, what React compares.
 
 ---
 
 ## What we're deliberately skipping
 
-- **Class components** — the old API. You'll see them in older codebases but won't write new ones. The pattern is the same; just know they exist.
-- **React.memo / useMemo / useCallback** — performance optimisations. Important later; not needed to understand the fundamentals.
-- **Suspense** — an advanced pattern for async rendering. §05 recognition-targets covers it briefly.
-- **Context and useReducer** — covered in §04.
+- **Class components** — the old API. You'll recognise them in legacy code; the same loop applies. Don't write new ones.
+- **`React.memo` / `useMemo` / `useCallback`** — performance tuning. They only change _when_ the function re-runs (step 7). Later.
+- **Suspense** — advanced async rendering; §05 recognition-targets mentions it.
+- **Context and `useReducer`** — §04. Both are just "where state lives" (step 6) variations.
 
 ---
 
 ## Stop condition
 
-You're done with this section when you can:
+You're done when you can:
 
-- Open the playground, add a message by typing in the input, and explain exactly what caused the screen to update (which state changed, which component re-rendered, and why).
-- Read `notes/effects-useeffect.tsx` and explain the dependency array without looking at the comments.
+- Explain, without notes, **who calls your component** and **what `setState` actually does to the `count` variable** (nothing — it schedules a fresh call).
+- Open the playground, type a message, and narrate the update as a sequence: _which setter fired → which component function re-ran → what React compared → what single thing changed in the DOM._
+- Read `notes/effects-useeffect.tsx` and explain the dependency array without reading the comments.
 
 If you can do that, move on to `04-react-hooks-patterns/`.

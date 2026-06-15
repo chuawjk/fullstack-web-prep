@@ -114,6 +114,9 @@ npm run 02:03        # 03-generics.ts
 npm run 02:04        # 04-narrowing.ts
 npm run 02:05        # 05-utility-types.ts
 
+# §03 React — run the from-scratch mini-React first (no browser, no deps):
+npm run 03:model        # runs a 70-line React engine; prints how it works
+
 # §03 React playground:
 npm run 03:playground   # starts Vite dev server at http://localhost:5173
 

@@ -1,17 +1,20 @@
 /*
-  useEffect runs code AFTER a component renders, for side effects — things
-  that reach outside the React world: fetching data, setting up a timer or
-  websocket, writing to localStorage, subscribing to an external store.
+  useEffect is the escape hatch from React's loop. The loop (mental-model.ts) is:
+  state → render → commit to the DOM. An effect runs AFTER the commit, for things
+  that aren't "compute JSX from state": fetching data, timers, websockets,
+  localStorage, subscriptions — anything reaching the world outside React.
 
-  "Side effect" in React means: anything that isn't just computing JSX.
+  Python analogy: a callback that fires after a change — a Django post_save signal
+  or an observer callback.
 
-  Python analogy: a callback or lifecycle hook that fires after a state change.
-  Like a post_save signal in Django, or an observer pattern callback.
+  THE DEPENDENCY ARRAY controls WHEN the effect re-runs:
+    • no array      → after EVERY render
+    • []            → once, after the first render (like componentDidMount)
+    • [a, b]        → after any render where a or b changed
+  Its cleanup function (if returned) runs before the next run and on unmount.
 
-  IMPORTANT RULE: the dependency array [dep1, dep2] controls WHEN the effect runs.
-    - No array    → run after EVERY render
-    - []          → run once, after the first render (like componentDidMount)
-    - [dep1, dep2] → run after renders where dep1 or dep2 changed
+  READING GUIDE: `function Thing() {}` is a DEFINITION; `<Thing .../>` elsewhere
+  is a CALL SITE. Read-first reference; live versions in playground/.
 */
 
 import React, { useState, useEffect } from "react";
@@ -22,21 +25,21 @@ interface Message {
   content: string;
 }
 
-// === EFFECT WITH NO DEPENDENCIES =============================================
-// Runs after EVERY render — usually not what you want for data fetching.
-// Mainly useful for things that should sync on every update (e.g. document.title).
+// === Definition: effect with no dependency array ==============================
+// Runs after EVERY render. Rarely what you want — mainly for things that should
+// stay in sync on every update, like the document title.
 
 function TitleUpdater({ title }: { title: string }) {
   useEffect(() => {
-    // document.title is a browser API — pure side effect, can't be in the render.
+    // document.title is a browser API — a side effect, so it can't live in the
+    // render itself (the render must stay a pure description).
     document.title = `${title} — Chat`;
-  });  // no dependency array: runs after every render
+  }); // no array → runs after every render
   return <span>{title}</span>;
 }
 
-// === FETCH ON MOUNT (empty dependency array) =================================
-// The most common pattern: fetch data once when the component first appears.
-// Empty [] means "run once after the first render, then never again."
+// === Definition: fetch on mount (empty dependency array) ======================
+// The most common pattern: load data once when the component first appears.
 
 function MessageHistory({ userId }: { userId: string }) {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -44,26 +47,24 @@ function MessageHistory({ userId }: { userId: string }) {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // Fetch messages for this user from the API.
-    // The async function is defined INSIDE the effect (you can't make the
-    // effect callback itself async — React doesn't accept a promise return).
+    // The async function is defined INSIDE the effect — the effect callback
+    // itself can't be async (React doesn't accept a returned promise).
 
-    // AbortController: lets us cancel the in-flight request if the component
-    // unmounts or userId changes before the response arrives.
-    // Without this, the setState calls would fire on a dead component.
-    // Python analogy: cancelling a threading.Thread before it finishes.
+    // AbortController cancels the in-flight request if the component unmounts or
+    // userId changes before the response lands — otherwise setState would fire on
+    // a gone component. Python analogy: cancelling a thread before it finishes.
     const controller = new AbortController();
 
     async function fetchMessages() {
       try {
         const res = await fetch(`/api/messages?userId=${userId}`, {
-          signal: controller.signal,  // pass the cancel signal to fetch
+          signal: controller.signal,
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data: Message[] = await res.json();
         setMessages(data);
       } catch (err) {
-        // Ignore AbortError — it just means the effect cleaned up before fetching finished.
+        // AbortError just means we cleaned up before the fetch finished — ignore it.
         if (err instanceof Error && err.name === "AbortError") return;
         setError(err instanceof Error ? err.message : "Unknown error");
       } finally {
@@ -73,12 +74,13 @@ function MessageHistory({ userId }: { userId: string }) {
 
     fetchMessages();
 
-    // Cleanup: cancel the request if userId changes or component unmounts.
+    // Cleanup: cancel the request when the effect re-runs or the component unmounts.
     return () => controller.abort();
   }, [userId]);
-  // [userId] dependency: re-run the effect whenever userId changes.
-  // If userId changes (different user logs in), we re-fetch their messages.
+  // [userId]: re-run when userId changes (a different user → re-fetch their messages).
 
+  // Three phases, matched to what the user sees (the pattern from
+  // lists-and-conditional.tsx, here driven by a real async fetch):
   if (isLoading) return <p>Loading…</p>;
   if (error) return <p>Error: {error}</p>;
 
@@ -91,29 +93,26 @@ function MessageHistory({ userId }: { userId: string }) {
   );
 }
 
-// === CLEANUP: returning a function from the effect ============================
-// If the effect sets up a subscription or timer, return a cleanup function.
-// React calls it before running the effect again AND when the component unmounts.
-// Python analogy: a context manager's __exit__, or a try/finally block.
+// === Definition: cleanup (returning a function from the effect) ===============
+// If the effect sets up something ongoing (timer, subscription), return a cleanup
+// function. React runs it before the next effect AND on unmount. Without it, the
+// timer/subscription leaks past the component's life.
+// Python analogy: a context manager's __exit__, or a try/finally.
 
 function TypingIndicator({ conversationId }: { conversationId: string }) {
   const [isTyping, setIsTyping] = useState(false);
 
   useEffect(() => {
-    // Imagine a WebSocket connection that pushes "user is typing" events.
-    // (Simulated here — a real app would use a WebSocket or Supabase Realtime.)
+    // Pretend a websocket pushes "user is typing" events (simulated with a timer).
     const timer = setInterval(() => {
-      setIsTyping(prev => !prev);  // toggle every 2 seconds for demo purposes
+      setIsTyping(prev => !prev); // functional updater — see state-usestate.tsx
     }, 2000);
 
-    // CLEANUP FUNCTION — returned from the effect.
-    // Called when: conversationId changes (before re-running), or component unmounts.
-    // Without this, the interval would keep running even after the component is gone.
-    return () => {
-      clearInterval(timer);  // Python equivalent: timer.cancel() on a threading.Timer
-    };
+    // Runs when conversationId changes (before re-running) or on unmount.
+    return () => clearInterval(timer); // Python: timer.cancel()
   }, [conversationId]);
 
+  // Returning null renders nothing — a valid thing for a component to return.
   return isTyping ? <p>Someone is typing…</p> : null;
 }
 

@@ -1,62 +1,75 @@
 /*
-  PROPS are the inputs to a component — data passed from a parent to a child.
-  They flow ONE-WAY: from parent down to child. A child cannot directly modify
-  the parent's data; it can only call a function the parent passed down.
+  PROPS are a component's inputs — data passed from a parent down to a child.
+  They flow ONE WAY: down. A child can't change a parent's data; it can only
+  call a function the parent handed it (that's how events travel back up).
 
-  Python analogy: function arguments. `<Button label="Send" onClick={handleClick} />`
-  is like calling  button(label="Send", on_click=handle_click).
+  Python analogy: function arguments. Writing  <Button label="Send" onClick={fn}/>
+  is like calling  button(label="Send", on_click=fn)  — except React makes the
+  call, not you.
+
+  READING GUIDE (same as components.tsx):
+    • `function Thing({...}) {}`   = DEFINITION (what props it accepts).
+    • `<Thing prop={...} />`        = CALL SITE (passing those props in).
+  Each definition below is followed by a "Used like this" call site so you can
+  see both halves together.
+
+  Read-first reference; the live versions are in playground/.
 */
 
 import React from "react";
 
-// === BASIC PROPS ==============================================================
-// Define props as a TypeScript interface — each field is one "attribute" in JSX.
+// === Definition: basic props ==================================================
+// Declare the props as a TypeScript interface — each field is one attribute at
+// the call site.
 
 interface MessageBubbleProps {
   role: "user" | "assistant";
   content: string;
-  timestamp?: string;  // ? = optional prop. Python: Optional[str]
+  timestamp?: string; // ? = optional. Python: Optional[str]
 }
 
 function MessageBubble({ role, content, timestamp }: MessageBubbleProps) {
-  // Destructuring in the parameter: extracts role, content, timestamp from the props object.
-  // Python equivalent: def f(self, role, content, timestamp=None): or **kwargs unpacking.
+  // The { } in the parameter is destructuring: pull role/content/timestamp out
+  // of the single props object. Python: def f(*, role, content, timestamp=None).
   const isUser = role === "user";
 
   return (
     <div className={`message ${isUser ? "message--user" : "message--bot"}`}>
       <span>{content}</span>
-      {/* Conditional rendering: if timestamp exists, show it. If not, render nothing. */}
-      {/* Python: f"{timestamp}" if timestamp else ""  */}
+      {/* timestamp && <…> renders the <small> only when timestamp is truthy;
+          when it's undefined, nothing renders. Python: x if x else "" */}
       {timestamp && <small className="timestamp">{timestamp}</small>}
     </div>
   );
 }
+// Used like this (inside some parent's JSX):
+//   <MessageBubble role="user" content="Hello" timestamp="09:14" />
 
-// === CALLBACK PROPS ===========================================================
-// Events flow UPWARD via callback functions passed as props.
-// The parent defines what happens; the child just calls the function.
-// Python analogy: passing a callback function as an argument.
+// === Definition: callback props (events flow up) ==============================
+// A child can't reach up to its parent. Instead the parent passes a function
+// down as a prop; the child calls it. Python: passing a callback as an argument.
 
 interface ChatInputProps {
-  onSend: (text: string) => void;  // a function type: takes a string, returns nothing
+  onSend: (text: string) => void; // a function type: takes a string, returns nothing
   disabled?: boolean;
 }
 
 function ChatInput({ onSend, disabled = false }: ChatInputProps) {
-  // Default value for disabled: if not passed, it defaults to false.
-  // Python equivalent: def f(disabled=False):
+  // disabled = false is a default value. Python: def f(disabled=False).
   const [draft, setDraft] = React.useState("");
 
   const handleClick = () => {
-    if (draft.trim()) {
-      onSend(draft);   // call the parent's function with the text
-      setDraft("");    // clear the input (local state)
+    if (draft.trim()) {     // trim() strips whitespace; "" is falsy → skip empties
+      onSend(draft);        // call the PARENT's function — this is "events up"
+      setDraft("");         // clear our own local state
     }
   };
 
   return (
     <div>
+      {/* value={draft} makes this a "controlled input": React owns the value.
+          onChange fires per keystroke; e is the browser change event, and
+          e.target.value is the input's current text. More in §04. */}
       <input
         value={draft}
         onChange={e => setDraft(e.target.value)}
@@ -68,14 +81,17 @@ function ChatInput({ onSend, disabled = false }: ChatInputProps) {
     </div>
   );
 }
+// Used like this — the PARENT decides what "send" does:
+//   <ChatInput onSend={(text) => addMessage(text)} disabled={isLoading} />
 
-// === CHILDREN PROP ============================================================
-// `children` is a special built-in prop: the JSX content nested INSIDE a component.
-// Python: no equivalent (HTML has this naturally; Python functions don't).
+// === Definition: the children prop ============================================
+// `children` is a built-in prop: whatever JSX you nest BETWEEN a component's
+// opening and closing tags arrives as `children`. It's the composition primitive
+// for wrappers (cards, modals, layouts). No Python equivalent.
 
 interface CardProps {
   title: string;
-  children: React.ReactNode;  // ReactNode = anything React can render (JSX, string, array...)
+  children: React.ReactNode; // ReactNode = anything renderable: JSX, string, array…
 }
 
 function Card({ title, children }: CardProps) {
@@ -86,13 +102,19 @@ function Card({ title, children }: CardProps) {
     </div>
   );
 }
+// Used like this — note where each prop comes from:
+//
+//   <Card title="Chat">                 ← title is a normal attribute prop
+//     <MessageBubble role="user" .../>  ← everything nested here becomes
+//   </Card>                               Card's `children` prop, rendered
+//                                         where {children} appears above.
+//
+// So `title` and `children` are both just props; one is written as an attribute,
+// the other as nested content.
 
-// Usage: <Card title="Chat"><MessageBubble role="user" content="Hello" /></Card>
-// The MessageBubble JSX becomes the `children` prop inside Card.
-
-// === PROP DRILLING (THE PROBLEM CONTEXT solves) ==============================
-// If a deeply nested component needs data, you must pass it as props through
-// every intermediate component. This is called "prop drilling" — fine for 2-3
-// levels, tedious for deeper trees. Context (§04) solves this.
+// === Prop drilling (the problem Context solves) ==============================
+// To get data to a deeply nested child, you pass it as props through every
+// component in between. That's "prop drilling" — fine for 2–3 levels, tedious
+// deeper. Context (§04) is the escape hatch.
 
 export { MessageBubble, ChatInput, Card };

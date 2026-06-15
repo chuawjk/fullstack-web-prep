@@ -14,10 +14,16 @@ export function EffectDemo() {
   const [isTyping, setIsTyping] = useState(false);
   const [elapsed, setElapsed] = useState(0);
 
+  // Re-renders once per second because EFFECT 2's timer calls setElapsed.
+  console.log("🔁 render EffectDemo — conversationId:", conversationId, "| elapsed:", elapsed);
+
   // EFFECT 1: runs whenever conversationId changes.
   // Simulates "subscribe to typing indicator for this conversation".
   // The CLEANUP cancels the subscription when conversationId changes or component unmounts.
   useEffect(() => {
+    // Watch the order when you switch conversations: the OLD conversation's
+    // 🧹 cleanup runs first, THEN this ✅ effect runs for the new one.
+    console.log("✅ effect[conversationId] — subscribed to", conversationId);
     setIsTyping(false);  // reset when switching conversations
 
     // Simulate a "bot is typing" notification after 1.5 seconds.
@@ -26,6 +32,7 @@ export function EffectDemo() {
     // CLEANUP — returned function runs before the next effect execution,
     // and when the component unmounts. Prevents stale timers from firing.
     return () => {
+      console.log("🧹 cleanup[conversationId] — unsubscribed from", conversationId);
       clearTimeout(typingTimer);
       setIsTyping(false);
     };
@@ -35,13 +42,20 @@ export function EffectDemo() {
   // EFFECT 2: runs once on mount (empty dep array).
   // Simulates a "time since mounted" counter — like an uptime display.
   useEffect(() => {
+    // Runs once when the tab opens. Switch to another tab and back: you'll see
+    // 🧹 cleanup[] then ✅ effect[] again — because the component unmounts and
+    // a fresh one mounts. The elapsed counter resets to 0, proving it's new.
+    console.log("✅ effect[] — mounted; starting 1s timer");
     const interval = setInterval(() => {
       setElapsed(prev => prev + 1);
     }, 1000);
 
     // Cleanup: clear the interval when the component unmounts.
     // Without this, the interval would run forever after leaving this tab.
-    return () => clearInterval(interval);
+    return () => {
+      console.log("🧹 cleanup[] — unmounted; timer cleared");
+      clearInterval(interval);
+    };
   }, []);
   // [] — empty dep array: run once on mount, cleanup on unmount.
 
