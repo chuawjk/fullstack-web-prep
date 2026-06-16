@@ -50,7 +50,7 @@ import React, { createContext, useContext, useState } from "react";
 // is only used when a consumer has NO Provider above it — the null guard in
 // useTheme() below catches that case and turns it into a loud error.
 
-type Theme = "light" | "dark";
+type Theme = "light" | "dark" | "system";
 
 interface ThemeContextValue {
   theme: Theme;
@@ -73,7 +73,11 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   function toggleTheme() {
     // React supplies `prev` — the current slot value at the moment React runs
     // this updater. (Same functional updater form as §03; safe with batched updates.)
-    setTheme((prev) => (prev === "light" ? "dark" : "light"));
+    setTheme((prev) => {
+      if (prev === "light") return "dark";
+      if (prev === "dark") return "system";
+      return "light";
+    });
   }
 
   // FOOTGUN: this object literal is rebuilt on every ThemeProvider render, so
@@ -129,7 +133,14 @@ function MessageBubble({ content }: { content: string }) {
   const bg = theme === "light" ? "#e5e7eb" : "#374151";
   const color = theme === "light" ? "#111827" : "#f9fafb";
   return (
-    <div style={{ background: bg, color, padding: "10px 14px", borderRadius: "12px" }}>
+    <div
+      style={{
+        background: bg,
+        color,
+        padding: "10px 14px",
+        borderRadius: "12px",
+      }}
+    >
       {content}
     </div>
   );

@@ -4,6 +4,7 @@
   "private": true,
   "description": "Full-stack web dev learning repo — TypeScript, React, Node, Express, Prisma, auth, testing",
   "scripts": {
+    "01:serve": "npx serve 01-browser-html-css -p 5175",
     "02:01": "tsx 02-typescript/01-types.ts",
     "02:02": "tsx 02-typescript/02-interfaces-and-types.ts",
     "02:03": "tsx 02-typescript/03-generics.ts",
@@ -11,6 +12,7 @@
     "02:05": "tsx 02-typescript/05-utility-types.ts",
     "03:model": "tsx 03-react-fundamentals/notes/mental-model.ts",
     "03:playground": "cd 03-react-fundamentals/playground && npm run dev",
+    "04:playground": "cd 04-react-hooks-patterns/playground && npm run dev",
     "06:server": "tsx 06-backend-node-express-prisma/express-server.ts",
     "06:queries": "tsx 06-backend-node-express-prisma/prisma-queries.ts",
     "07:sessions": "tsx 07-auth/sessions-from-scratch.ts",
