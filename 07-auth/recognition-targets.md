@@ -2,6 +2,8 @@
 
 These are the auth libraries you'll encounter in real Next.js/TypeScript codebases. You should be able to read their code, understand what they handle, and explain why a team might use them — without needing to implement from scratch.
 
+None of these change the README's boundary — the server still keeps the truth and the browser still holds a token. They just implement *more* of the surface around it (OAuth, email verification, CSRF, rotation) than you'd want to hand-roll. Because you built the core yourself, you can now read their session code and know exactly what each piece is doing.
+
 ---
 
 ## Better Auth

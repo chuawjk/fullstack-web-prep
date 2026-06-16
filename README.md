@@ -4,6 +4,14 @@
 
 ---
 
+## The problem this prep solves
+
+You can read any Python codebase cold: you know what the ORM is doing, why the async code is structured that way, how the distributed system fits together. But open a real Next.js app and you freeze — is this JSX or HTML? Is this React or TypeScript? Is that a framework pattern or a business-logic pattern? The gap isn't conceptual depth; it's vocabulary and pattern recognition in a new runtime.
+
+**Key insight:** you already understand the hard parts (state machines, async, ORMs, event loops, typed interfaces). What you're building here is the web-specific vocabulary that maps what you know onto a new stack. The goal is recognition and fluency, not memorisation from scratch.
+
+---
+
 ## Setup — dependencies and extensions
 
 ### In the devcontainer (automatic)

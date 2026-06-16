@@ -1,14 +1,41 @@
 /*
-  API / ENDPOINT TESTS — testing an Express route end-to-end.
+  API / endpoint tests — HTTP request → status + body.
 
-  We spin up the Express app IN-PROCESS (no real network call) and use the
-  Node.js `fetch` API to send requests to it. The app runs locally, using an
-  in-memory store instead of a real database.
+  PROBLEM
+  -------
+  Unit and component tests verify individual pieces, but they don't tell you
+  whether your Express routes actually respond correctly to real HTTP requests:
+  correct status codes, correct JSON bodies, correct Zod validation rejections.
+  You need to exercise the whole request lifecycle — JSON parsing → Zod validation
+  → route handler → response — as one test.
 
-  This tests the full request lifecycle:
-    fetch → express.json() middleware → validation → route handler → response
+  CONCEPT
+  -------
+  Start the real Express app in-process on a random port (no real network cost),
+  hit it with `fetch`, assert on status and body. The whole middleware chain runs.
+  Nothing is mocked here, on purpose — the app is fast and deterministic enough
+  to run for real. The boundary being tested is the HTTP contract. Mocking the
+  app would mean testing a fake instead of what you ship.
 
-  Python equivalent: Flask's test_client() or FastAPI's TestClient (httpx).
+  KEY INSIGHT
+  -----------
+  Mock at the boundary only when the cost of running the real thing is too high
+  (slow DB, paid API, non-deterministic external service). An in-memory app is
+  cheap enough to run for real — mocking it buys you nothing and hides real bugs.
+
+  IN THIS FILE
+  ------------
+  • buildApp()          — a factory that creates a self-contained, testable app
+                          instance (not the production singleton)
+  • beforeAll/afterAll  — start and stop the server once per suite
+  • GET /api/users      — empty array
+  • POST /api/users     — 201 success, 422 invalid email, 422 missing field
+  • GET /api/users/:id  — 200 success, 404 not found
+
+  PYTHON ANALOGY
+  --------------
+  Flask's test_client() or FastAPI's TestClient (httpx) — same idea: start the
+  app in-process, hit it with real requests, assert on responses.
 
   Run: npm run 08:test
 */
@@ -18,11 +45,12 @@ import express, { Request, Response } from "express";
 import { z } from "zod";
 import http from "http";
 
-// === THE APP UNDER TEST =======================================================
-// Duplicated here rather than importing from express-server.ts so:
-// 1. The test is self-contained.
-// 2. We can swap the in-memory store for a test DB if needed.
-// 3. We control the port and lifecycle.
+// ── The app under test ────────────────────────────────────────────────────────
+// PURPOSE: defined as a factory function so each test suite gets a fresh instance
+// with its own in-memory store. Reasons:
+//   1. The test is self-contained — no shared singleton state across tests.
+//   2. We control the port and lifecycle (port 0 = OS assigns a free one).
+//   3. We can swap the in-memory store for a test DB without changing test logic.
 
 interface UserResponse {
   id: string;
@@ -72,8 +100,9 @@ function buildApp() {
   return app;
 }
 
-// === TEST SETUP ==============================================================
-// beforeAll / afterAll: run once before/after the entire describe block.
+// ── Test setup ────────────────────────────────────────────────────────────────
+// PURPOSE: start the server once before all tests in this file, stop it after.
+// Port 0 = OS assigns a free port — prevents conflicts when tests run in parallel.
 // Python equivalent: pytest's module-scoped fixtures.
 
 let server: http.Server;
@@ -81,8 +110,6 @@ let baseUrl: string;
 
 beforeAll(() => {
   return new Promise<void>(resolve => {
-    // Listen on port 0 = OS assigns a random available port.
-    // This prevents port conflicts when running tests in parallel.
     server = buildApp().listen(0, () => {
       const addr = server.address() as { port: number };
       baseUrl = `http://localhost:${addr.port}`;
@@ -95,16 +122,14 @@ afterAll(() => {
   return new Promise<void>(resolve => server.close(() => resolve()));
 });
 
-// === TESTS ===================================================================
+// ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe("GET /api/users", () => {
   it("returns an empty array when no users exist", async () => {
     const res = await fetch(`${baseUrl}/api/users`);
 
-    // ASSERT: HTTP status
     expect(res.status).toBe(200);
 
-    // ASSERT: response body
     const data = await res.json();
     expect(Array.isArray(data)).toBe(true);
   });
@@ -112,14 +137,12 @@ describe("GET /api/users", () => {
 
 describe("POST /api/users", () => {
   it("creates a user with valid data and returns 201", async () => {
-    // ARRANGE + ACT
     const res = await fetch(`${baseUrl}/api/users`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: "test@example.com", displayName: "Test User" }),
     });
 
-    // ASSERT
     expect(res.status).toBe(201);
 
     const user = await res.json() as UserResponse;
@@ -146,7 +169,6 @@ describe("POST /api/users", () => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: "x@example.com" }),
-      // displayName is missing — Zod should reject this
     });
 
     expect(res.status).toBe(422);

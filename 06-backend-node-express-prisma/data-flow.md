@@ -90,8 +90,9 @@ BROWSER                      NODE / EXPRESS                    SQLITE
 
 ## The middleware pipeline (zoomed in on step 2–4)
 
-Each middleware is a function that receives `(req, res, next)`.
-Calling `next()` passes control to the next function.
+Each middleware is a function that receives `(req, res, next)` — all three supplied by Express. Read this as the **baton** from the README: `req` is one object passed straight down, and each box below *writes onto it* (`req.body`, then `req.user`) so the next box can read what the last one added.
+
+Calling `next()` passes the baton to the next function.
 NOT calling `next()` (and calling `res.json()` instead) short-circuits the chain.
 
 ```

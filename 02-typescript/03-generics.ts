@@ -1,35 +1,58 @@
 /*
-  GENERICS let you write code that works for MULTIPLE types while keeping
-  type safety. You write a function or interface once, then TypeScript fills
-  in the actual type at each call site.
+  Generics — writing code that works for multiple types without losing type safety.
 
-  Python equivalent: TypeVar + Generic[T]
-    T = TypeVar("T")
-    def identity(x: T) -> T: return x
+  PROBLEM
+  -------
+  You're writing a function to find an item by ID — first for users, then for
+  messages, then for conversations. Three near-identical functions differing only
+  in their type. The instinct is to use `any`, but `any` defeats the type checker:
+  you lose autocomplete, catch no errors, and the type information disappears
+  downstream. You need one function that stays typed for each concrete use.
 
-  TypeScript:
-    function identity<T>(x: T): T { return x; }
+  CONCEPT
+  -------
+  Generics let you parameterize a function or interface over a type. The type
+  parameter <T> is a placeholder the compiler fills in from context at each call
+  site. You write the function once; TypeScript infers the concrete type when you
+  call it, so the return value is fully typed without you writing anything extra.
 
-  The <T> is a TYPE PARAMETER — a placeholder the compiler resolves when
-  you call the function. It's inferred from the argument, so you rarely
-  need to write the type explicitly at the call site.
+  KEY INSIGHT
+  -----------
+  <T> is to TypeScript what TypeVar is to Python — a placeholder that resolves per
+  call site without losing type information. The key difference: TypeScript infers
+  T from the arguments, so you rarely need to write `findById<Message>(...)`.
+
+  IN THIS FILE
+  ------------
+  • Generic functions — <T> in action; inference from arguments
+  • Generic interfaces — ApiResponse<T>, one envelope for any payload type
+  • Constrained generics — T extends HasId limits what T can be
+  • Optional chaining (?.) — safe property access on possibly-null values
+
+  PYTHON ANALOGY
+  --------------
+  TypeVar + Generic[T] — same concept, slightly different syntax:
+    Python: T = TypeVar("T");  def identity(x: T) -> T: return x
+    TS:                        function identity<T>(x: T): T { return x; }
 */
 
 // Run this file: tsx 02-typescript/03-generics.ts
 
-// === GENERIC FUNCTION =========================================================
-// <T> declares a type parameter. T is the conventional name (like Python's T).
+// ── Generic function ──────────────────────────────────────────────────────────
+// PURPOSE: shows the basic <T> syntax — a placeholder type that TypeScript
+// infers from what you pass in, so you never need to write identity<string>(...).
+
 function identity<T>(value: T): T {
   return value;
 }
 
-const str = identity("hello");  // T is inferred as string — no need to write identity<string>
-const num = identity(42);       // T is inferred as number
+const str = identity("hello");  // T inferred as string
+const num = identity(42);       // T inferred as number
 
-// === GENERIC INTERFACE =========================================================
-// Foreshadowing the project: a typed API response envelope.
-// The payload type (T) varies per endpoint, but the wrapper shape is always the same.
-// Python equivalent: @dataclass + Generic[T]
+// ── Generic interface ─────────────────────────────────────────────────────────
+// PURPOSE: one wrapper shape that works for any payload type — the classic
+// API response envelope. T changes per endpoint; the wrapper never changes.
+// Python: @dataclass + Generic[T]
 
 interface ApiResponse<T> {
   data: T | null;
@@ -43,7 +66,7 @@ interface Message {
   content: string;
 }
 
-// The same generic interface, specialised for two different payload types:
+// The same interface specialised for two different payload types:
 const singleMessage: ApiResponse<Message> = {
   data: { id: "1", role: "user", content: "Hello" },
   error: null,
@@ -59,17 +82,18 @@ const messageList: ApiResponse<Message[]> = {
   status: 200,
 };
 
-// === GENERIC WITH CONSTRAINT ==================================================
-// The `extends` keyword constrains what T can be.
-// Python equivalent: TypeVar("T", bound=SomeBase)
+// ── Constrained generics ──────────────────────────────────────────────────────
+// PURPOSE: `T extends HasId` limits what T can be — any type that has at least
+// an `id: string` field. The function can then use `.id` safely, because T is
+// guaranteed to have it regardless of what else it carries.
+// Python: TypeVar("T", bound=SomeBase)
 
 interface HasId {
   id: string;
 }
 
-// T can be any type that has at least an `id: string` property.
 function findById<T extends HasId>(items: T[], id: string): T | undefined {
-  // Array.find is like Python's next((x for x in items if x.id == id), None)
+  // Array.find ≈ Python's next((x for x in items if x.id == id), None)
   return items.find(item => item.id === id);
 }
 
@@ -81,19 +105,20 @@ const messages: Message[] = [
 const found = findById(messages, "2");
 
 // Optional chaining (?.) — only access .content if found is not null/undefined.
-// Python equivalent:  found.content if found else None
+// Python: found.content if found else None
 console.log(found?.content);  // "Nice to meet you!"
 
-// === GENERIC ARRAY UTILITY ====================================================
-// A generic function that wraps a value in an array.
-// Demonstrates T being inferred from context rather than from arguments.
+// ── Generic array utility ─────────────────────────────────────────────────────
+// PURPOSE: T inferred from the argument, not explicitly provided — shows that
+// you almost never need to write the type parameter at the call site.
+
 function wrapInArray<T>(value: T): T[] {
   return [value];
 }
 
 const wrappedMsg = wrapInArray(singleMessage.data!);
-// The ! is "non-null assertion" — we're telling TS "trust me, this isn't null".
-// Use it sparingly; prefer a proper null check in real code.
+// The ! is "non-null assertion" — telling TS "trust me, this isn't null".
+// Use sparingly; prefer a real null check in production code.
 
 console.log(`Found: "${found?.content}"`);
 console.log(`Single message status: ${singleMessage.status}`);

@@ -4,6 +4,31 @@
 
 This is where every prior section converges. Don't start here; come back after completing §02–§07.
 
+## The problem this section solves
+
+You know all the individual pieces — React components, typed Express routes, Prisma queries, session auth, async state machines — but you've never wired them into one working application. You also haven't dealt with streaming: a server that pushes tokens one by one as the LLM generates them, and a client that appends them to the UI in real time.
+
+**Key insight:** streaming is the one genuinely new concept here. A normal response is `return value`; a streamed response is `yield value` over and over until done — a Python generator over HTTP. Everything else in this project is assembling §02–§08 pieces you already understand.
+
+If you haven't done §09 yet, consider doing it first — reading Vercel's production chatbot before building your own shows you exactly what you're aiming for and gives you a reference for each phase.
+
+---
+
+## What each phase exercises
+
+The build is sequenced so each phase leans on one section's mental model — you're not learning new concepts here, you're assembling the ones you have. The one genuinely new thing is **streaming** (Phase 5); everything else is application.
+
+| Phase | Exercises | Mental model |
+|---|---|---|
+| 1 Skeleton | App Router file routing | §05 routing — folders define routes |
+| 2 Database | schema → tables + typed client | §06 Prisma — one schema, two outputs |
+| 3 Auth | session cookie + protected route | §07 trust boundary — server keeps the truth |
+| 4 History | typed CRUD over conversations | §06 baton — request → status + body |
+| 5 Streaming | `ReadableStream` token-by-token | **NEW** — see below |
+| 6 Polish | loading/error states, scroll | §04 async state machine |
+
+**The one new concept — streaming.** Everything before this returned a *complete* response: the handler computes the whole body, then sends it. A streamed response sends bytes *as they're produced* — the server pushes each token from OpenAI to the browser the instant it arrives, and the client appends it to the assistant bubble live. There's no §0x analog for this; it's the genuinely new idea the capstone introduces. The mental hook: a normal response is `return value`; a stream is `yield value` over and over until done (Python's generator — same shape, over HTTP). Watch for that `for await … controller.enqueue` loop on the server and the `reader.read()` loop on the client — they're the two ends of one generator.
+
 ---
 
 ## What you're building

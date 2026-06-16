@@ -1,24 +1,56 @@
 /*
-  SESSION AUTH FROM SCRATCH — the Lucia-educational approach.
-  Read lucia-auth.com for the authoritative guide; this file is a standalone
-  runnable demonstration of the same concepts.
+  Session auth from scratch — understanding the mechanism before using a library.
 
-  What we're building:
-    1. Hash a password with bcrypt
-    2. Create a session token + store it in the DB
-    3. Read the cookie on the next request + validate the session
-    4. Revoke the session on logout
+  PROBLEM
+  -------
+  Most web apps need to know who's making a request. HTTP is stateless — every
+  request arrives with no inherent identity. After a user logs in, the browser
+  needs a way to prove "I'm the user who logged in earlier" on every subsequent
+  request, and the server needs a way to verify that claim without trusting it
+  blindly. If you just read the session token value directly, you need to understand
+  what you're trusting and why.
 
-  Python equivalent: implementing sessions manually in Flask using
-  flask.session (server-side), itsdangerous tokens, and a DB table.
+  CONCEPT
+  -------
+  Session auth splits the problem: the server stores the truth (a Session row
+  mapping a random token to a userId + expiry); the browser holds only the token
+  (an opaque string sent on every request via a cookie). On each request, the
+  server looks up the token — found + not expired = authenticated. Logging out
+  deletes the server-side row, making the token worthless instantly. The password
+  is never stored — only a slow hash of it.
+
+  KEY INSIGHT
+  -----------
+  The browser holds a key (the token); the server holds the lock (the Session row).
+  Logout = delete the lock. The key alone is worthless without a matching row.
+
+  IN THIS FILE
+  ------------
+  • Password hashing (SHA-256 stand-in for bcrypt — see warning in code)
+  • Session token generation (crypto.randomBytes — 256 bits of randomness)
+  • signup / login / validateSession / logout
+  • demo() — walks the full lifecycle: signup → login → validate → wrong-password
+              rejection → logout → revoked token failing validation
+
+  WHEN YOU'D USE THIS
+  -------------------
+  The concepts here are universal; in practice you'd use Better Auth or Auth.js
+  (covered in §07 recognition-targets.md) rather than hand-rolling. This file
+  exists so the library code makes sense when you read it.
+
+  PYTHON ANALOGY
+  --------------
+  Flask session + a DB-backed store, or Django's session framework — same model:
+  token in cookie, truth stored server-side.
 
   Run: tsx 07-auth/sessions-from-scratch.ts
-  (simulates the full lifecycle in memory — no real DB or HTTP)
+  (simulates the full lifecycle in memory and prints each step — no real DB/HTTP)
 */
 
 import crypto from "crypto";  // Node.js built-in — no npm install needed
 
-// === TYPES ===================================================================
+// ── Types ─────────────────────────────────────────────────────────────────────
+
 interface User {
   id: string;
   email: string;
@@ -34,18 +66,21 @@ interface Session {
   createdAt: Date;
 }
 
-// === IN-MEMORY "DATABASE" ====================================================
-// In a real app these would be Prisma queries.
-const users: Map<string, User> = new Map();          // id → User
-const sessions: Map<string, Session> = new Map();    // token → Session
-const usersByEmail: Map<string, User> = new Map();   // email → User
+// ── In-memory "database" ──────────────────────────────────────────────────────
+// PURPOSE: stand-ins for Prisma queries so the file runs standalone. In a real
+// app these Maps would be replaced with `prisma.user.findUnique(...)` etc.
 
-// === PASSWORD HASHING ========================================================
-// We simulate bcrypt here without the actual library so the file runs standalone.
-// In a real app: import bcrypt from "bcryptjs"; const hash = await bcrypt.hash(pw, 10)
+const users: Map<string, User> = new Map();       // id → User
+const sessions: Map<string, Session> = new Map(); // token → Session
+const usersByEmail: Map<string, User> = new Map();// email → User
+
+// ── Password hashing ──────────────────────────────────────────────────────────
+// PURPOSE: shows WHY hashing exists, even though the implementation here is
+// deliberately unsafe (SHA-256 is not suitable for passwords — see warning below).
 //
-// WHY HASH? Never store raw passwords. If the DB is compromised, hashed passwords
-// are useless to the attacker (good luck reversing bcrypt's 10 rounds).
+// Never store raw passwords. If the DB is compromised, hashed passwords are
+// useless to an attacker IF the algorithm is slow. bcrypt/argon2/scrypt are
+// specifically designed to be slow — that cost is the defence against brute-forcing.
 // Python equivalent: werkzeug.security.generate_password_hash()
 
 function simulateHash(password: string): string {
@@ -55,20 +90,23 @@ function simulateHash(password: string): string {
 }
 
 function simulateVerify(password: string, hash: string): boolean {
+  // FOOTGUN (real code): comparing hashes with === leaks timing information — it
+  // returns early on the first differing byte, hinting at how much matched.
+  // Real password libraries (bcrypt.compare, argon2.verify) use constant-time
+  // comparison. Fine in this in-memory demo; never ship `===` here.
   return simulateHash(password) === hash;
 }
 
-// === SESSION TOKEN GENERATION ================================================
-// A session token is a random, opaque string. It's the "password" for the session.
-// crypto.randomBytes(32) gives 32 bytes = 256 bits of randomness.
-// .toString("hex") converts to a 64-character hex string.
+// ── Session token generation ──────────────────────────────────────────────────
+// PURPOSE: a session token is a random, opaque string — the "password" for the
+// session. 32 bytes = 256 bits of randomness makes brute-forcing infeasible.
 // Python equivalent: secrets.token_hex(32)
 
 function generateToken(): string {
   return crypto.randomBytes(32).toString("hex");
 }
 
-// === AUTH OPERATIONS =========================================================
+// ── Auth operations ───────────────────────────────────────────────────────────
 
 function signup(email: string, password: string, displayName: string): User {
   if (usersByEmail.has(email)) {
@@ -92,8 +130,8 @@ function login(email: string, password: string): { user: User; session: Session 
   const user = usersByEmail.get(email);
 
   if (!user) {
-    // Important: use the same error message for "user not found" and "wrong password".
-    // Different messages would let an attacker enumerate valid email addresses.
+    // Important: same error message for "user not found" and "wrong password".
+    // Different messages let an attacker enumerate valid email addresses.
     throw new Error("Invalid email or password");
   }
 
@@ -102,12 +140,11 @@ function login(email: string, password: string): { user: User; session: Session 
     throw new Error("Invalid email or password");
   }
 
-  // Create a new session for this login.
   const session: Session = {
     id: crypto.randomUUID(),
     token: generateToken(),   // this token goes in the cookie
     userId: user.id,
-    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),  // 7 days from now
+    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),  // 7 days
     createdAt: new Date(),
   };
 
@@ -123,7 +160,7 @@ function validateSession(token: string): { user: User; session: Session } | null
 
   if (!session) {
     console.log("✗ Session not found");
-    return null;  // no session with this token
+    return null;
   }
 
   if (session.expiresAt < new Date()) {
@@ -148,33 +185,30 @@ function logout(token: string): void {
   console.log("✓ Session revoked");
 }
 
-// === DEMO: full lifecycle ====================================================
+// ── Demo: full lifecycle ───────────────────────────────────────────────────────
+// PURPOSE: runs every step in sequence so you can read the printed output next
+// to the code and see exactly what the server stores vs. what the browser would hold.
+
 function demo() {
   console.log("=== Session Auth Demo ===\n");
 
-  // 1. Signup
   const user = signup("alice@example.com", "hunter2", "Alice");
 
-  // 2. Login
   const { session } = login("alice@example.com", "hunter2");
   const token = session.token;
   console.log(`  Token (first 16 chars): ${token.slice(0, 16)}…\n`);
 
-  // 3. Validate session (simulates reading the cookie on the next request)
   const auth = validateSession(token);
   console.log(`  Authenticated as: ${auth?.user.displayName}\n`);
 
-  // 4. Try wrong password
   try {
     login("alice@example.com", "wrongpassword");
   } catch (e) {
     console.log(`✗ Login rejected: ${(e as Error).message}\n`);
   }
 
-  // 5. Logout
   logout(token);
 
-  // 6. Try to use the revoked token
   const afterLogout = validateSession(token);
   console.log(`  After logout validation: ${afterLogout === null ? "null (correct)" : "BUG!"}`);
 }

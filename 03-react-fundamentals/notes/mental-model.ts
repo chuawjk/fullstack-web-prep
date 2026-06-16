@@ -1,23 +1,46 @@
 /*
   A from-scratch mini-React in ~70 lines — no dependencies, no magic.
 
+  PROBLEM
+  -------
+  Reading the React API cold ("useState stores a value", "useEffect runs after
+  render") leaves you with a list of rules without a mental model. When something
+  breaks — a value resets unexpectedly, an effect fires too often, a closure reads
+  stale data — you can't reason from first principles. You need to see the engine.
+
+  CONCEPT
+  -------
   Every other file in notes/ uses real React and explains one piece of its API.
   This one goes underneath the API: it rebuilds the engine itself so you can see
-  what React is actually doing when it "renders" a component. Read it top to
-  bottom, then run it and read the printed output next to the code.
+  what React is actually doing when it "renders" a component. Three ideas land here
+  that the rest of §03 assumes: JSX is data, components are functions React calls,
+  and a re-render is a fresh call with fresh locals.
 
-  Run it:  npm run 03:model      (from the repo root)
-      or:  npx tsx 03-react-fundamentals/notes/mental-model.ts
+  KEY INSIGHT
+  -----------
+  A "render" is just another function call with new arguments. React stores state
+  outside the function; on each call it hands that state back in. The screen is a
+  slideshow of frames, not a document you edit in place.
 
-  Python analogy: like writing a 50-line toy autograd to demystify backprop
-  before trusting torch.autograd — same move, applied to React.
+  IN THIS FILE
+  ------------
+  • createElement — what JSX compiles to (a plain object)
+  • render()      — walks the tree, calls component functions, emits output
+  • Two render frames — shows that re-renders are two separate calls
+  • diff()        — shows why re-running everything is cheap (only the delta touches the DOM)
+
+  PYTHON ANALOGY
+  --------------
+  Like writing a 50-line toy autograd to demystify backprop before trusting
+  torch.autograd — same move, applied to React.
+
+  Run: npm run 03:model
+    or: npx tsx 03-react-fundamentals/notes/mental-model.ts
 */
 
-// === Elements are data ========================================================
-// JSX like  <p>Count: {count}</p>  is not HTML and not a draw command. The
-// compiler rewrites it into a createElement(...) call that returns a plain
-// object. The jargon for that object is an "element": a description of what
-// should be on screen, not the thing itself. Here is the whole definition:
+// ── Elements are data ─────────────────────────────────────────────────────────
+// PURPOSE: establishes that JSX is not HTML and not a draw command — it's a
+// plain data object. Once you can see that, the rest of React is less magic.
 
 type VNode = {
   type: string | Function; // "div" (a host tag) OR a component function
@@ -44,13 +67,12 @@ const tree = createElement(
 
 console.log("── an element is just data ───────────────────────────────────");
 console.log(JSON.stringify(tree, null, 2));
-// Run it: no DOM, no browser, no React — just an object you could have typed
-// yourself. The thing to keep: a piece of JSX is a value, not an action.
+// No DOM, no browser, no React — just an object you could have typed yourself.
+// The thing to keep: a piece of JSX is a value, not an action.
 
-// === A component is a function ================================================
-// A component takes props and returns one of those description objects. It does
-// not draw, mount, or change anything. You define it here; something else calls
-// it later (see the next block).
+// ── A component is a function ─────────────────────────────────────────────────
+// PURPOSE: shows that a component is literally a function that takes props and
+// returns a description. No drawing, no mounting — just a return value.
 
 function Counter(props: { count: number }): VNode {
   return createElement(
@@ -61,14 +83,10 @@ function Counter(props: { count: number }): VNode {
   );
 }
 
-// === Who calls the component, and the two phases of a render ==================
-// The `render` function below is standing in for React. Two things to notice.
-// First: YOU never call Counter() — `render` does, when it meets a component in
-// the tree. (React calling your functions, rather than you calling React, is
-// what people mean by "inversion of control".) Second: it works in two passes —
-// walk the description, then turn it into output. React's names for those two
-// passes are "render" (build the description) and "commit" (apply it to the
-// DOM). Here we apply it to an HTML string instead, but it's the same shape.
+// ── The engine: who calls the component ──────────────────────────────────────
+// PURPOSE: shows inversion of control — YOU never call Counter(), the engine
+// does. Also shows the two passes: describe (build the tree) → apply (emit output).
+// React's names: "render" (build) and "commit" (apply to DOM).
 
 function render(node: any): string {
   // A leaf — string or number — renders to itself.
@@ -88,16 +106,10 @@ function render(node: any): string {
 console.log("\n── the engine calls your component, then emits output ────────");
 console.log(render(createElement(Counter, { count: 0 })));
 
-// === A re-render is just another call =========================================
-// This is the part that fights an imperative instinct, so go slow. Updating
-// state does not change a variable in place. It asks the engine to CALL THE
-// COMPONENT AGAIN — a fresh call, with fresh locals.
-//
-// Note what you'd actually write in real React: never `Counter(...)`, but
-// <Counter count={0}/>, which is just data — createElement(Counter, {count:0})
-// = { type: Counter, props: {count:0} }. React reads that object and makes the
-// call. The two lines below are us playing React by hand so you can watch two
-// renders happen as two genuinely separate calls.
+// ── A re-render is just another call ─────────────────────────────────────────
+// PURPOSE: the most important thing to internalise. Updating state does not
+// change a variable in place — it asks the engine to call the component again.
+// Each call gets fresh locals; count is a const, not a mutable variable.
 
 const frame0 = Counter({ count: 0 }); // render #0 — React would make this call
 const frame1 = Counter({ count: 1 }); // render #1 — a brand-new call, new locals
@@ -105,14 +117,13 @@ const frame1 = Counter({ count: 1 }); // render #1 — a brand-new call, new loc
 console.log("\n── two renders are two separate function calls ───────────────");
 console.log("render #0:", render(frame0));
 console.log("render #1:", render(frame1));
-// `count` was never reassigned. Render #0 read 0, render #1 read 1. The screen
+// `count` was never reassigned. Render #0 read 0; render #1 read 1. The screen
 // is a slideshow of frames, not a document you edit in place.
 
-// === Diffing the frames (why re-running everything is cheap) ==================
-// Re-running the whole component sounds wasteful. It isn't, because the engine
-// compares the previous description with the new one and keeps only the
-// difference — the jargon is "reconciliation". Only that difference reaches the
-// real DOM. Here is a toy version over the two frames above:
+// ── Diffing the frames ────────────────────────────────────────────────────────
+// PURPOSE: shows why re-running everything is cheap — the engine compares the
+// previous description to the new one and applies only the delta to the DOM.
+// "Reconciliation" in React's vocabulary; only the changed text node gets updated.
 
 function diff(a: any, b: any, path = "root"): void {
   if (typeof a !== typeof b) {

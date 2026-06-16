@@ -1,53 +1,78 @@
 /*
-  COOKIES: small pieces of data the server sends to the browser, which the browser
-  automatically sends back on every subsequent request to the same domain.
+  Cookies — how the browser holds and returns the session token securely.
 
-  This is how "being logged in" is implemented: the server creates a session,
-  stores it in a database, and gives the browser a token in a cookie. The browser
-  presents the token on every request; the server looks up the session.
+  PROBLEM
+  -------
+  After a successful login the server has a session token and needs to give it to
+  the browser. Returning it in a JSON body and storing it in localStorage would
+  work — but any XSS vulnerability would let a malicious script read it from
+  localStorage and steal the session. You need the token stored somewhere that
+  JavaScript can't access.
 
-  Python equivalent: Django's SESSION_COOKIE_NAME, or Flask's set_cookie().
-  The concept is identical — sessions + cookies is universal web auth.
+  CONCEPT
+  -------
+  Set-Cookie headers tell the browser to store a value and send it back
+  automatically on every future request to the same domain — with no JavaScript
+  involvement. Security flags on the cookie constrain when and how the browser
+  sends it. Each flag was added to stop a specific class of attack. Read each flag
+  as "the attack it prevents," not as a configuration knob.
+
+  KEY INSIGHT
+  -----------
+  HttpOnly prevents XSS scripts from reading the token. Secure prevents network
+  interception. SameSite prevents CSRF. Each flag is a defence against one specific
+  attack — misconfiguring any one of them reopens that attack surface.
+
+  IN THIS FILE
+  ------------
+  • The Set-Cookie header format and what each flag does
+  • exampleSetCookie — the header the server sends on login
+  • exampleClearCookie — the header the server sends on logout (Max-Age=0)
+  • Sessions vs. JWTs comparison
+
+  PYTHON ANALOGY
+  --------------
+  Django's SESSION_COOKIE_* settings / Flask's set_cookie() — same flags, same
+  security model. The cookie mechanism itself is browser-specific (no Python
+  equivalent for the automatic attachment on every request).
 
   Run: tsx 07-auth/cookies.ts
+  (prints the raw Set-Cookie headers for login and logout)
 */
 
-// === THE COOKIE HEADER ========================================================
-// When a server sends  Set-Cookie: name=value; options  in a response header,
-// the browser stores that cookie and returns it in every future request to
-// that domain as  Cookie: name=value.
-
-// The critical security options (and what they do):
+// ── The Set-Cookie header ──────────────────────────────────────────────────────
+// When the server sends  Set-Cookie: name=value; options  in a response header,
+// the browser stores that cookie and returns it on every future request to that
+// domain as  Cookie: name=value.
 
 /*
   HttpOnly
   ────────
-  The cookie cannot be read by JavaScript (document.cookie).
+  The cookie CANNOT be read by JavaScript (document.cookie returns nothing for it).
   This PREVENTS XSS attacks from stealing the session token:
     - Attacker injects malicious JS into your page
     - JS tries to read document.cookie
     - Browser refuses because HttpOnly is set
     - Session token is safe
-
-  WITHOUT HttpOnly: any script running on your page can steal the session.
+  WITHOUT HttpOnly: any script on your page can steal the session.
   ALWAYS set HttpOnly on session cookies.
   Python Django: SESSION_COOKIE_HTTPONLY = True (the default)
 
   Secure
   ──────
   The cookie is only sent over HTTPS, never plain HTTP.
-  Prevents the cookie from being stolen by a network attacker (man-in-the-middle).
+  PREVENTS the cookie from being stolen by a network attacker (man-in-the-middle).
   ALWAYS set in production. Omit in local dev (which uses HTTP).
   Python Django: SESSION_COOKIE_SECURE = True
 
   SameSite=Lax  (or Strict)
   ─────────────────────────
   Controls cross-site request behaviour.
-  Lax: cookie is sent on same-site requests AND top-level navigation (e.g. clicking a link).
+  Lax:    cookie is sent on same-site requests AND top-level navigation (clicking a link).
   Strict: cookie is ONLY sent on same-site requests. More secure, but breaks OAuth flows.
-  None: cookie is sent everywhere. ONLY safe with Secure.
-  Default modern browsers: Lax. Always specify it explicitly.
-  This PREVENTS CSRF (Cross-Site Request Forgery) attacks.
+  None:   cookie is sent everywhere. ONLY safe with Secure.
+  Default in modern browsers: Lax. Always specify it explicitly.
+  PREVENTS CSRF (Cross-Site Request Forgery) attacks.
 
   Path=/
   ──────
@@ -57,17 +82,18 @@
   ────────────────────────────────
   604800 = 7 days in seconds. When this expires, the browser deletes the cookie.
   Omitting both: "session cookie" — deleted when the browser closes.
-  We always set an explicit expiry so sessions have a predictable lifetime.
+  Always set an explicit expiry so sessions have a predictable lifetime.
 */
 
-// === EXAMPLE: setting a session cookie in Express ============================
-// This is the code that runs after a successful login.
+// ── Setting a session cookie on login ─────────────────────────────────────────
+// PURPOSE: shows the raw Set-Cookie header value the server sends after a
+// successful login. In Express you'd use res.cookie() with the options below —
+// the library builds this header for you.
 
 function exampleSetCookie() {
   const sessionToken = "demo-token-abc123";
   const sevenDays = 60 * 60 * 24 * 7;  // in seconds
 
-  // The raw Set-Cookie header value (what the server would send):
   const cookieValue = [
     `session=${sessionToken}`,
     `HttpOnly`,
@@ -81,7 +107,7 @@ function exampleSetCookie() {
   console.log(cookieValue);
   console.log();
 
-  // In an Express handler you'd write:
+  // In Express:
   // res.cookie("session", sessionToken, {
   //   httpOnly: true,
   //   secure: process.env.NODE_ENV === "production",  // only HTTPS in prod
@@ -91,10 +117,12 @@ function exampleSetCookie() {
   // });
 }
 
-// === CLEARING A COOKIE (logout) ==============================================
-// To log a user out: delete the session from the database AND clear the cookie.
-// A cookie is "cleared" by setting it with the same name but Max-Age=0 or a past Expires.
-// The browser deletes it immediately.
+// ── Clearing a cookie on logout ────────────────────────────────────────────────
+// PURPOSE: to log a user out, delete the session from the database AND clear the
+// cookie. A cookie is "cleared" by setting it with the same name but Max-Age=0.
+// The browser deletes it immediately. Without this the stale token stays in the
+// browser even after the server-side session is gone — not a security hole (the
+// session lookup fails), but confusing UX.
 
 function exampleClearCookie() {
   const cookieValue = "session=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0";
@@ -103,7 +131,7 @@ function exampleClearCookie() {
   // Express: res.clearCookie("session");
 }
 
-// === SESSIONS vs JWTs: a quick comparison ====================================
+// ── Sessions vs. JWTs ─────────────────────────────────────────────────────────
 // Sessions (what we're building):
 //   + Can be revoked instantly (delete the session row in DB)
 //   + Less data on the wire (just a token)
@@ -111,13 +139,14 @@ function exampleClearCookie() {
 //   − Stateful — harder to scale across many servers (use a shared store like Redis)
 //
 // JWTs (alternative):
-//   + Stateless — no DB lookup needed; the token IS the data
+//   + Stateless — no DB lookup needed; the token IS the data, signed with a secret
 //   + Easy to pass between microservices
-//   − Hard to revoke: must wait for expiry, or maintain a revocation list (negating the benefit)
+//   − Hard to revoke: must wait for expiry, or maintain a revocation list
+//     (which adds back the statefulness you removed)
 //   − Larger cookies (the token contains all the data)
 //
-// For most web apps with a single server/database: sessions win. For API-only
-// or microservice auth: JWTs are common.
+// For most web apps with a single database: sessions win. For API-only or
+// microservice auth where you need to pass identity without a DB lookup: JWTs.
 
 exampleSetCookie();
 exampleClearCookie();

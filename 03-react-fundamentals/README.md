@@ -2,6 +2,14 @@
 
 **Objective:** read a React component cold and explain what it renders, what re-runs it, and what React does with the result.
 
+## The problem this section solves
+
+You write a button that calls `setCount(count + 1)`, and the very next line reads `count` — still 0. You add a `console.log` at the top of a component and it fires three times for one click. You add a `useEffect` for a network call and it runs infinitely. None of it makes sense until you understand that React, not you, calls your component function — and re-calls it every time state changes.
+
+**Key insight:** you never call your component and you never touch the DOM. React calls your function repeatedly, builds element-tree descriptions from what it returns, and patches only the diff. `setState` doesn't mutate the variable; it schedules another function call with new values. Every React mystery traces back to this.
+
+§01 showed you the imperative version of this: find the DOM node, set `.textContent`, done. React replaces that entirely. §02's interface knowledge is what makes prop types readable — you'll hit `{ message: Message; onSend: (text: string) => void }` as a prop type in the first file.
+
 Most of what makes React confusing isn't the API — it's the _machine underneath_: how your code actually executes. `useState`, props, JSX, keys all become easy once you can see that machine. So this section teaches the machine first, in plain terms, and only then names the parts.
 
 > Coming from imperative Python, here's the one sentence that everything below unpacks: **you never run your UI code, and you never touch the screen.** You write functions that return descriptions, hand them to React, and React decides when to call them and what to change.
@@ -189,4 +197,4 @@ You're done when you can:
 - Open the playground, type a message, and narrate the update as a sequence: _which setter fired → which component function re-ran → what React compared → what single thing changed in the DOM._
 - Read `notes/effects-useeffect.tsx` and explain the dependency array without reading the comments.
 
-If you can do that, move on to `04-react-hooks-patterns/`.
+If you can do that, move on to `04-react-hooks-patterns/`. That section answers the one question §03 deliberately left open: if the function rebuilds all its locals on every render, how does state survive between calls?

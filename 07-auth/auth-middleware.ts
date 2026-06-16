@@ -1,21 +1,52 @@
 /*
-  AUTH MIDDLEWARE — protecting routes in an Express app.
+  Auth middleware — protecting routes by verifying the session before the handler runs.
 
-  This builds directly on sessions-from-scratch.ts.
-  The middleware reads the session cookie, validates the session, and either:
-    - Attaches req.user and calls next() (authenticated)
-    - Returns 401 / redirects to login (unauthenticated)
+  PROBLEM
+  -------
+  You have routes that only authenticated users should reach: /api/me, admin pages,
+  conversation history. You could put the session-check logic in every handler, but
+  that's easy to forget on new routes and hard to update consistently. You need the
+  auth check to run automatically before any handler in a protected route, and to
+  stop the request if it fails.
 
-  Python equivalent: Django's @login_required decorator, or Flask-Login's
-  @login_required. Same concept — a guard that runs before the view function.
+  CONCEPT
+  -------
+  Auth middleware is §06's baton pattern applied to §07's trust boundary. It reads
+  the session token from the incoming cookie, looks it up in the session store, and
+  either writes the verified user onto `req.user` and calls next() (authenticated),
+  or sends a 401/redirect and stops the chain. Everything downstream can trust
+  `req.user` unconditionally — this middleware is the single gate that turned an
+  untrusted token into a verified identity.
+
+  KEY INSIGHT
+  -----------
+  By the time a handler runs, requireAuth has already verified identity and written
+  it to `req.user`. The handler uses it without re-checking. This is why "put auth
+  first in the middleware chain" matters — later handlers rely on the invariant it
+  establishes.
+
+  IN THIS FILE
+  ------------
+  • requireAuth   — reads cookie → looks up session → writes req.user or 401/redirect
+  • sendUnauthorized — branches on Accept header: browsers get a redirect, API
+                       clients (fetch, curl) get a 401 JSON response
+  • requireRole   — a factory that returns middleware checking a specific role
+  • demo server   — public /health, protected /api/me, admin-only /api/admin
+
+  PYTHON ANALOGY
+  --------------
+  Django's @login_required or Flask-Login's @login_required — a guard that runs
+  before the view and either passes control on or rejects with a redirect/401.
 
   Run: tsx 07-auth/auth-middleware.ts
+  (starts a server; the printed curl commands show the 401 / 200 each path returns)
 */
 
 import express, { Request, Response, NextFunction } from "express";
 import crypto from "crypto";
 
-// === TYPES ===================================================================
+// ── Types ─────────────────────────────────────────────────────────────────────
+
 interface User {
   id: string;
   email: string;
@@ -28,8 +59,7 @@ interface Session {
   expiresAt: Date;
 }
 
-// Extend Express's Request type so TypeScript knows about req.user.
-// Any middleware that sets req.user makes it available to all downstream handlers.
+// Extend Express's Request type so TypeScript knows about req.user downstream.
 declare global {
   namespace Express {
     interface Request {
@@ -38,8 +68,9 @@ declare global {
   }
 }
 
-// === SIMULATED SESSION STORE =================================================
-// In a real app: prisma.session.findUnique({ where: { token } })
+// ── Simulated session store ───────────────────────────────────────────────────
+// PURPOSE: stand-in for prisma.session.findUnique({ where: { token } }) so the
+// demo runs without a database.
 
 const FAKE_USERS = new Map<string, User>([
   ["u-1", { id: "u-1", email: "alice@example.com", displayName: "Alice" }],
@@ -49,7 +80,7 @@ const FAKE_SESSIONS = new Map<string, Session>([
   ["valid-token-abc", {
     token: "valid-token-abc",
     userId: "u-1",
-    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),  // 7 days from now
+    expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
   }],
 ]);
 
@@ -61,21 +92,13 @@ function lookupSession(token: string): { user: User; session: Session } | null {
   return { user, session };
 }
 
-// === AUTH MIDDLEWARE ==========================================================
-// Reads the session cookie, validates the session, attaches req.user.
-//
-// Two different responses depending on caller:
-//   Browser page requests → redirect to /login (the user sees the login page)
-//   API requests          → 401 JSON (the frontend handles the error)
-//
-// How to tell them apart: the Accept header.
-//   Browser: Accept: text/html
-//   fetch():  Accept: */*  or  application/json
+// ── requireAuth (DEFINITION) ──────────────────────────────────────────────────
+// PURPOSE: the single gate that turns an untrusted token into a verified identity.
+// Two response types depending on the caller — see sendUnauthorized below.
 
 export function requireAuth(req: Request, res: Response, next: NextFunction): void {
-  // Cookies arrive as the "Cookie" header. Express's cookie-parser parses them
-  // into req.cookies. Without cookie-parser, you'd need to parse the header manually.
-  // For the demo we read from req.headers directly.
+  // Cookies arrive as the "Cookie" header. In production use the `cookie-parser`
+  // package; here we parse manually to avoid a dependency.
   const rawCookie = req.headers.cookie ?? "";
   const sessionToken = parseCookieToken(rawCookie, "session");
 
@@ -87,42 +110,42 @@ export function requireAuth(req: Request, res: Response, next: NextFunction): vo
   const auth = lookupSession(sessionToken);
 
   if (!auth) {
-    // Session not found or expired.
-    // Clear the stale cookie so the browser stops sending it.
+    // Session not found or expired. Clear the stale cookie so the browser stops
+    // sending it — cosmetic, not a security measure.
     res.clearCookie("session");
     sendUnauthorized(req, res, "Session invalid or expired");
     return;
   }
 
-  // Attach the user to the request — downstream handlers read it as req.user.
-  req.user = auth.user;
-  next();  // ✓ authenticated — continue to the route handler
+  req.user = auth.user;  // write the verified identity onto the baton
+  next();                // ✓ authenticated — continue to the route handler
 }
 
-// Decide whether to redirect (browsers) or return 401 (API clients).
+// ── sendUnauthorized ──────────────────────────────────────────────────────────
+// PURPOSE: browsers expect a redirect to the login page; API clients (fetch, curl)
+// expect a JSON 401. The Accept header is the signal.
+
 function sendUnauthorized(req: Request, res: Response, reason: string): void {
   const acceptsHtml = (req.headers.accept ?? "").includes("text/html");
 
   if (acceptsHtml) {
-    // Browser — redirect to login page.
-    res.redirect("/login");
+    res.redirect("/login");                          // browser → show the login page
   } else {
-    // API client (fetch, curl, etc.) — return JSON error.
-    res.status(401).json({ error: "Unauthorized", reason });
+    res.status(401).json({ error: "Unauthorized", reason }); // API client → JSON error
   }
 }
 
 // Helper: parse a named cookie from the raw Cookie header string.
-// In a real app, use the `cookie-parser` npm package instead.
 function parseCookieToken(cookieHeader: string, name: string): string | null {
-  // Cookie header format: "name1=val1; name2=val2; ..."
   const match = cookieHeader.match(new RegExp(`(?:^|; )${name}=([^;]+)`));
   return match ? match[1] : null;
 }
 
-// === OPTIONAL MIDDLEWARE: role guard ==========================================
-// Factories return middleware that check a specific condition.
-// Python: @requires_permission("admin")  or  @staff_member_required
+// ── requireRole — role guard factory (DEFINITION) ─────────────────────────────
+// PURPOSE: a factory that returns middleware checking a specific condition. Same
+// factory pattern as validateBody in middleware.ts — closes over `role` so the
+// returned function can use it without Express passing a 4th parameter.
+// Python: @requires_permission("admin") or @staff_member_required
 
 export function requireRole(role: "admin" | "user") {
   return (req: Request, res: Response, next: NextFunction): void => {
@@ -131,7 +154,6 @@ export function requireRole(role: "admin" | "user") {
       return;
     }
     // In a real app, check req.user.role against the required role.
-    // Here we just simulate: only alice is "admin" for demo purposes.
     const isAdmin = req.user.email === "alice@example.com";
     if (role === "admin" && !isAdmin) {
       res.status(403).json({ error: "Forbidden — admin only" });
@@ -141,21 +163,22 @@ export function requireRole(role: "admin" | "user") {
   };
 }
 
-// === DEMO SERVER ==============================================================
+// ── Demo server ───────────────────────────────────────────────────────────────
+// PURPOSE: shows the three route types — public, protected, admin-only — with
+// the middleware chain that enforces each.
+
 const app = express();
 app.use(express.json());
 
-// Public route — anyone can access:
 app.get("/health", (_req, res) => res.json({ status: "ok" }));
 
-// Protected route — requireAuth must pass first:
+// Protected: requireAuth must pass before the handler runs.
 app.get("/api/me", requireAuth, (req, res) => {
-  // req.user is guaranteed to exist here because requireAuth would have
-  // returned 401 before reaching this handler.
+  // req.user is guaranteed here — requireAuth would have returned 401 otherwise.
   res.json({ user: req.user });
 });
 
-// Admin route — requires auth AND admin role:
+// Admin: auth AND role check, both in the chain before the handler.
 app.get("/api/admin", requireAuth, requireRole("admin"), (req, res) => {
   res.json({ message: `Welcome, admin ${req.user?.displayName}!` });
 });

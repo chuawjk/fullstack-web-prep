@@ -1,41 +1,63 @@
 /*
-  A component is a function that returns JSX — the description React turns into
-  DOM. React calls your function for you (see notes/mental-model.ts); you never
-  call it directly. It re-calls automatically whenever the component's state or
-  props change.
+  Components — functions that return descriptions React turns into DOM.
 
-  Python analogy: a function that takes data and returns a description of output —
-  except React decides when to run it, and runs it again on every change.
+  PROBLEM
+  -------
+  If you've only written Python functions and classes, JSX is visually surprising.
+  `<Greeting />` looks like an HTML tag but it's calling a function — sort of. And
+  `<div className="card">` looks like HTML but it's not. Before you can read React
+  code fluently you need straight answers to three questions: what IS a component,
+  what does `<Thing />` actually do, and why does the same syntax describe both a
+  plain HTML element and a component function?
 
-  READING GUIDE for this whole folder:
-    • `function Thing() { ... }`     is a DEFINITION — what the component is.
-    • `<Thing />` inside another      is a CALL SITE — a description that tells
-      component's returned JSX         React "call Thing here". It is NOT you
-                                       calling Thing; React makes the call.
-  Definitions and call sites are labelled below so the two never blur together.
+  CONCEPT
+  -------
+  A component is a plain function that returns JSX. JSX compiles to
+  React.createElement() calls that produce plain objects describing the UI — not
+  DOM nodes, not rendered output. React calls your function; you never call it
+  directly. When state or props change, React calls it again. The distinction to
+  internalize: `<Thing />` is not you calling Thing — it's a description telling
+  React to call Thing.
 
-  This file is a READ-FIRST reference, not a runnable — see playground/ for the
-  live app.
+  KEY INSIGHT
+  -----------
+  DEFINITION vs. CALL SITE: `function Thing() {}` is where you describe the
+  component. `<Thing />` inside another component's JSX is a description telling
+  React to call Thing — not you calling it. These two are labelled throughout this
+  file because that's where the confusion lives.
+
+  IN THIS FILE
+  ------------
+  • The simplest component and JSX syntax
+  • Dynamic data with {} inside JSX
+  • Composing components — nesting call sites
+  • Fragments — grouping siblings without a real DOM wrapper
+
+  PYTHON ANALOGY
+  --------------
+  A function that takes data and returns a description of output — except React
+  decides when to run it and re-runs it automatically on state/props changes.
+
+  Read-first reference; live versions are in playground/.
 */
 
 import React from "react";
 
-// === Definition: the simplest component =======================================
-// A component is just a function that returns JSX (the HTML-like syntax).
-// Its name MUST start with a capital letter — React uses the capital to tell a
-// component (<Greeting/>) apart from a plain HTML tag (<div/>).
+// ── The simplest component (DEFINITION) ──────────────────────────────────────
+// PURPOSE: shows that a component is literally a function returning JSX. The
+// capital letter on the name is required — React uses it to distinguish a
+// component (<Greeting/>) from a plain HTML tag (<div/>).
 
 function Greeting() {
   // JSX looks like HTML but compiles to function calls:
   //   <h1>Hello!</h1>  →  React.createElement("h1", null, "Hello!")
-  // No Python equivalent — it's syntax sugar for those createElement calls.
+  // There's no Python equivalent — it's syntax sugar for createElement calls.
   return <h1>Hello!</h1>;
 }
 
-// === Definition: a component with dynamic data ================================
-// Curly braces {} inside JSX drop back into "JavaScript mode" to evaluate an
-// expression and insert the result. (Python's nearest cousin is {x} inside an
-// f-string — but JSX inserts the value, not necessarily a string.)
+// ── Component with dynamic data (DEFINITION) ──────────────────────────────────
+// PURPOSE: shows how {} inside JSX switches to "JavaScript mode" to evaluate
+// an expression and insert the result — the slot for dynamic values.
 
 interface WelcomeProps {
   username: string;
@@ -50,13 +72,15 @@ function Welcome({ username }: WelcomeProps) {
       <h2>{greeting}</h2>
       <p>You have new messages.</p>
     </div>
+    // className, not class — "class" is a reserved word in JS, so React renames it.
   );
-  // className, not class — "class" is a reserved word in JS, so React renames it.
 }
 
-// === Definition: composing components =========================================
-// Components nest inside each other to form the component tree. A parent uses a
-// child by writing it like a tag — that tag is a CALL SITE for the child.
+// ── Composing components (DEFINITION + CALL SITES) ────────────────────────────
+// PURPOSE: shows that components nest to form the component tree, and that
+// `<MessageBubble ... />` inside ChatView is NOT you calling MessageBubble —
+// it's a description that tells React to call MessageBubble when it processes
+// ChatView's returned JSX.
 
 interface Message {
   id: string;
@@ -65,12 +89,12 @@ interface Message {
 }
 
 function MessageBubble({ role, content }: { role: string; content: string }) {
-  // role === "user" ? A : B   is a ternary — JS's inline if/else.
-  // Python: A if role == "user" else B   (note the different word order).
+  // Ternary: role === "user" ? A : B. Python: A if role == "user" else B
+  // (note the different word order).
   const bgColor = role === "user" ? "#2563eb" : "#e5e7eb";
   const textColor = role === "user" ? "white" : "black";
 
-  // style takes a JS object; the double braces are { (JS mode) + { (the object) }.
+  // style takes a JS object; the double braces are {(JS mode)} + {(the object)}.
   // CSS property names become camelCase: background-color → backgroundColor.
   return (
     <div style={{ background: bgColor, color: textColor, padding: "10px 14px", borderRadius: "12px" }}>
@@ -92,9 +116,9 @@ function ChatView() {
       <Welcome username="alice" />
 
       {/* CALL SITE x N: .map turns each Message into a <MessageBubble/>
-          description — React then calls MessageBubble once per message.
-          Python: [MessageBubble(...) for msg in messages]. `key` is identity
-          metadata for React's diffing, not a prop MessageBubble receives. */}
+          description — React calls MessageBubble once per message.
+          Python: [MessageBubble(...) for msg in messages].
+          `key` is identity metadata for React's diff, not a prop MessageBubble receives. */}
       {messages.map(msg => (
         <MessageBubble key={msg.id} role={msg.role} content={msg.content} />
       ))}
@@ -102,10 +126,10 @@ function ChatView() {
   );
 }
 
-// === Definition: fragments ====================================================
-// A component must return ONE root element. When you don't want a real wrapping
-// <div> in the DOM (it can break flexbox/grid or invalid table/list nesting),
-// wrap the siblings in a Fragment — it groups them but renders nothing itself.
+// ── Fragments (DEFINITION) ────────────────────────────────────────────────────
+// PURPOSE: a component must return ONE root element. When you don't want a real
+// wrapping <div> in the DOM (it can break flexbox/grid or invalid table nesting),
+// wrap siblings in a Fragment — it groups them but renders nothing itself.
 
 function TwoThings() {
   return (

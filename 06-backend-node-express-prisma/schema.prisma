@@ -1,11 +1,17 @@
-// Prisma schema file — defines the data models (tables) and the database connection.
+// Prisma schema file — the SINGLE SOURCE OF TRUTH for your data.
 //
-// After editing this file:
-//   npx prisma migrate dev --name <description>    → creates a migration + updates DB
-//   npx prisma generate                             → regenerates the TypeScript client
+// One file, two outputs (the mental model that makes Prisma click):
+//   • migrate → shapes the DATABASE  (creates/alters tables to match this file)
+//   • generate → shapes the TYPES    (writes a TS client whose return types match)
+// So a column and its TypeScript type can never drift — both are derived here.
 //
-// Python analogy: SQLAlchemy models + Alembic migrations, but the client code
-// is auto-generated from the schema instead of hand-written.
+// The two commands, and when each runs (the §05 build-time/runtime split):
+//   npx prisma migrate dev --name <description>  → migrates the DB  (build/dev time)
+//   npx prisma generate                          → regenerates the client (build time)
+// Neither runs in production request handling; @prisma/client (runtime) does.
+//
+// Python analogy: SQLAlchemy models + Alembic migrations — except the client code
+// is generated FROM the schema instead of being the hand-written model classes.
 
 // The `generator` block tells Prisma to generate a TypeScript/JavaScript client.
 generator client {

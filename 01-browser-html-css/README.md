@@ -2,6 +2,12 @@
 
 Your goal here is to _read and modify_, not to master CSS layout. We do just enough that you can open any web page, understand its structure, and reason about how it's styled. The deep time goes to TypeScript and React later.
 
+## The problem this section solves
+
+You open a web page in DevTools and see a wall of `div` tags, CSS rules, and JavaScript event listeners. You need to add a red border to a button when input is invalid, but you don't know whether to change the HTML, the CSS, or the JS — or why it matters which one you touch.
+
+**Key insight:** HTML is the tree (structure), CSS is how it looks (appearance), JS is what changes it (behaviour). Knowing which layer owns the thing you want to change is the whole job. The screen updates when JavaScript mutates the DOM — that loop is the heart of all frontend work.
+
 ## What you'll be able to do after this
 
 - Explain what HTML, CSS, and JavaScript each do, and how they divide responsibility
@@ -57,6 +63,10 @@ Make small changes and reload to see what happens. This is how the box model and
 ## One thing we're deliberately skipping
 
 CSS has a second major layout system, **Grid** (`display: grid`), for two-dimensional layouts. You'll see it in real code. For now just **recognise** it — flexbox handles everything in our chat UI, and chasing grid fluency isn't worth the time for your goals.
+
+## Where this leads
+
+The DOM mutation loop you're learning here — "JS finds an element, changes it, screen updates" — is exactly what §03 replaces. React's whole job is to make you stop writing `element.textContent = newValue` by hand. You need to have seen the manual version before the declarative abstraction makes sense. §02 (TypeScript) is the other prerequisite: it's what makes React component props readable instead of opaque.
 
 ## Stop condition
 

@@ -4,6 +4,29 @@
 
 This is a recognition exercise, not a build exercise. No code to write.
 
+## The problem this section solves
+
+You join a team or start an interview take-home and need to understand a 50-file Next.js codebase fast. You know the individual building blocks from §02–§08, but you haven't yet practised the skill of navigating from "I need to change how messages are fetched" to the right file within minutes.
+
+**Key insight:** every production codebase in this stack is built from the same six layers — routing, components, state, data, auth, tests. Find each layer, name what it does, and you can orient yourself in any repo. The checklist below is just a route through all six.
+
+---
+
+## Read it through your mental models
+
+You're not reading this repo cold — you're reading it with six lenses the earlier sections gave you. The cold-read is really "find where each model shows up":
+
+| When you see… | The lens from… | What you already know to ask |
+|---|---|---|
+| a component / `<Thing/>` | §03 IoC | who calls it, and what re-renders it |
+| `useState`/`useEffect`/custom hooks | §04 slots | what slot each owns; what triggers it |
+| a `package.json` entry | §05 grid | build-time or runtime? `deps` or `devDeps`? |
+| an API route / middleware | §06 baton | what it writes onto `req`; what status it returns |
+| an auth check | §07 trust boundary | what's the token, where's the server-side truth |
+| a test file | §08 boundaries | which boundary it cuts at; what's mocked |
+
+If you can attach the right lens to each thing you find, you can read any repo in this stack. The checklist below is just a route through all six.
+
 ---
 
 ## The repo
@@ -86,4 +109,4 @@ You're done with this section when you can:
 - Open the chosen repo, navigate to each item on the checklist, and answer every question within 10 minutes.
 - Sketch the architecture on a whiteboard (or in words) without looking at the repo.
 
-This section is optional if you're time-constrained — skip to §10 and come back here as a check-in after building the chatbot.
+This section is optional if you're time-constrained — skip to §10 and come back here as a check-in after building the chatbot. If you do it first, you'll recognise in the real repo exactly what you're about to build: the `/api/chat` streaming route (§10 Phase 5), the Prisma schema (§10 Phase 2), the auth middleware (§10 Phase 3), and the `useReducer`-driven message list (§04). Reading a production version before building your own is the fastest way to see how the pieces fit at real scale.

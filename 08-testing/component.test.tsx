@@ -1,18 +1,40 @@
 /*
-  COMPONENT TESTS with React Testing Library.
+  Component tests with React Testing Library — props + user events → DOM.
 
-  RTL renders components into a virtual DOM (jsdom) and lets you interact with
-  them the way a user would: by finding text on screen, clicking buttons, typing.
+  PROBLEM
+  -------
+  A unit test tells you a function returns the right value, but a React component's
+  contract is different: given certain props and user interactions, what appears on
+  screen? You need a test that renders the component into a fake DOM, simulates user
+  actions the way a real user would, and asserts on what's visible — without coupling
+  to internal state, CSS class names, or implementation details that change on every
+  refactor.
 
-  Philosophy: "The more your tests resemble the way your software is used,
-  the more confidence they give you." — Kent C. Dodds
+  CONCEPT
+  -------
+  React Testing Library renders components into jsdom (a fake browser environment)
+  and provides queries that mirror how users and screen readers perceive the page:
+  by role, label text, visible text — not by markup. The query priority list
+  (getByRole → getByLabelText → getByText → getByTestId) is a confidence scale:
+  queries higher on the list survive refactors better because they're closer to
+  what the user actually perceives.
 
-  This means: prefer queries that find elements the way the user sees them
-  (by role, label, text) over queries that rely on internal implementation
-  (CSS class names, component state).
+  KEY INSIGHT
+  -----------
+  Query by what the user sees, not by what the code does. `getByRole("button",
+  { name: /send/i })` survives a markup refactor; `getByClassName("btn-primary")`
+  doesn't. Use `queryBy` (not `getBy`) when asserting something is NOT present.
 
-  Python analogy: closer to Playwright's "user-visible" approach than to
-  unittest's "test the internals" approach.
+  IN THIS FILE
+  ------------
+  • MessageBubble tests — getByText, role labels
+  • ChatInput tests     — getByRole, getByLabelText, fireEvent, vi.fn() mock
+  • MessageList tests   — empty state, presence/absence with queryByText
+
+  PYTHON ANALOGY
+  --------------
+  Playwright's user-visible approach to queries, applied at the component level —
+  no real browser (jsdom fakes it), but the querying philosophy is the same.
 
   Run: npm run 08:test
 */
@@ -22,8 +44,9 @@ import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import "@testing-library/jest-dom";  // adds matchers: toBeInTheDocument, toBeDisabled, etc.
 
-// === COMPONENTS UNDER TEST ===================================================
-// In a real project these would be imported from src/components/...
+// ── Components under test ─────────────────────────────────────────────────────
+// PURPOSE: defined inline to keep this file self-contained. In a real project
+// these would be imported from src/components/...
 
 interface Message {
   id: string;
@@ -34,7 +57,7 @@ interface Message {
 function MessageBubble({ message }: { message: Message }) {
   return (
     <div
-      data-testid={`message-${message.id}`}  // data-testid: a way to target elements in tests
+      data-testid={`message-${message.id}`}  // data-testid: the LAST-RESORT hook — no user meaning; the tests below prefer getByText/getByRole
       className={`message message--${message.role}`}
     >
       <span>{message.content}</span>
@@ -79,18 +102,17 @@ function MessageList({ messages }: { messages: Message[] }) {
   );
 }
 
-// === TESTS ===================================================================
+// ── Tests ─────────────────────────────────────────────────────────────────────
 
 describe("MessageBubble", () => {
   it("renders the message content", () => {
     // ARRANGE: create the data
     const msg: Message = { id: "1", role: "user", content: "Hello there!" };
 
-    // ACT: render the component into the virtual DOM
+    // ACT: render into the virtual DOM
     render(<MessageBubble message={msg} />);
 
-    // ASSERT: check what's on screen
-    // getByText: find an element containing this text (throws if not found).
+    // ASSERT: getByText finds an element containing this text; throws if not found.
     expect(screen.getByText("Hello there!")).toBeInTheDocument();
   });
 
@@ -109,9 +131,8 @@ describe("ChatInput", () => {
   it("Send button is disabled when input is empty", () => {
     render(<ChatInput onSend={() => {}} />);
 
-    // getByRole: find by ARIA role — the recommended way.
-    // "button" matches <button>. {name: /send/i} matches the accessible name (text).
-    // /send/i is a regex — case-insensitive match.
+    // getByRole: find by ARIA role — the recommended first choice.
+    // "button" matches <button>. {name: /send/i} matches accessible name (case-insensitive regex).
     const button = screen.getByRole("button", { name: /send/i });
     expect(button).toBeDisabled();  // toBeDisabled comes from @testing-library/jest-dom
   });
@@ -121,14 +142,14 @@ describe("ChatInput", () => {
 
     const input = screen.getByLabelText("message input");  // finds by aria-label
     fireEvent.change(input, { target: { value: "Hello" } });
-    // fireEvent: simulates a DOM event. For typing, also see userEvent.type() for
-    // more realistic simulation (triggers keydown, keypress, keyup, etc.)
+    // fireEvent: simulates a DOM event. For more realistic typing simulation
+    // (keydown, keypress, keyup, etc.) use @testing-library/user-event instead.
 
     expect(screen.getByRole("button", { name: /send/i })).not.toBeDisabled();
   });
 
   it("calls onSend with the typed text when Send is clicked", () => {
-    // ARRANGE: create a mock function to capture what onSend is called with
+    // ARRANGE: create a mock function to capture what onSend receives
     const mockOnSend = vi.fn();
     render(<ChatInput onSend={mockOnSend} />);
 
@@ -174,9 +195,8 @@ describe("MessageList", () => {
     const messages: Message[] = [{ id: "1", role: "user", content: "Hi" }];
     render(<MessageList messages={messages} />);
 
-    expect(screen.queryByText("No messages yet.")).not.toBeInTheDocument();
     // queryByText (vs getByText): returns null instead of throwing when not found.
     // Use queryBy when asserting something is NOT present.
+    expect(screen.queryByText("No messages yet.")).not.toBeInTheDocument();
   });
 });
-

@@ -1,28 +1,54 @@
 /*
-  useContext solves PROP DRILLING: passing data through many layers of
-  components that don't use it themselves, just to get it to a deep child.
+  useContext — reading a value from an ancestor without threading it through props.
 
-  The pattern has two parts:
-    1. PROVIDE — wrap a subtree with a Context.Provider and pass a value
-    2. CONSUME — any component in that subtree calls useContext to read the value
+  PROBLEM
+  -------
+  You have a theme (light/dark) that several deeply nested components need: the
+  toggle button, the message bubbles, the sidebar icons. Threading `theme` down
+  through every intermediate component as a prop means components that don't USE
+  the theme still have to accept and forward it. As the tree deepens this becomes
+  brittle — add a new component layer and every component between the provider and
+  the consumer suddenly needs a new prop.
 
-  Python analogy: a global/module-level variable or a dependency-injection
-  container — any function in scope can read it without it being passed explicitly.
-  But unlike a global, Context is scoped to a component subtree.
+  CONCEPT
+  -------
+  createContext creates a named channel outside the component tree. A Provider
+  component writes the current value into that channel for its entire subtree. Any
+  descendant — no matter how deep — calls useContext to read it directly, with no
+  props involved. The value is scoped to the Provider's subtree, not the whole app.
 
-  When to use Context vs prop drilling:
-    - 1–2 levels deep: just use props. Context adds boilerplate.
-    - Many levels, read-mostly data (theme, current user, locale): use Context.
-    - Frequently-updating values (every keystroke): avoid Context — every consumer
-      re-renders when the value changes. Use a state manager or pass callbacks.
+  KEY INSIGHT
+  -----------
+  Context is not a global variable — it's a global for one subtree. A component
+  outside the Provider reads the default value (usually null), not the provided
+  one. This boundary is made explicit by the null guard in the named hook below.
+
+  IN THIS FILE (four steps)
+  ------------
+  • Step 1: createContext — define the channel and its type
+  • Step 2: ThemeProvider — own the state and write to the channel
+  • Step 3: useTheme      — wrap useContext in a named hook with a null guard
+  • Step 4: ThemeToggle + MessageBubble — two unrelated consumers reading the same slot
+
+  WHEN TO REACH FOR IT
+  --------------------
+  Read-mostly data needed many levels deep: theme, current user, locale → yes.
+  1–2 levels deep → just pass props; Context is pure boilerplate here.
+  A value that changes every keystroke → avoid: EVERY consumer re-renders when the
+  context value changes. Use local state or a dedicated store instead.
+
+  PYTHON ANALOGY
+  --------------
+  Python's contextvars.ContextVar — scoped to a call stack, not a module global.
+  Or Flask's `g` object for request-scoped data.
 */
 
 import React, { createContext, useContext, useState } from "react";
 
-// === CREATING A CONTEXT =======================================================
-// createContext<T>(defaultValue) creates a context object.
-// The default value is only used if there's no Provider above in the tree.
-// In real apps, the default is usually null and you throw if it's missing.
+// ── Step 1: create the context (DEFINITION) ───────────────────────────────────
+// PURPOSE: establishes the channel and its TypeScript type. The default (null)
+// is only used when a consumer has NO Provider above it — the null guard in
+// useTheme() below catches that case and turns it into a loud error.
 
 type Theme = "light" | "dark";
 
@@ -31,21 +57,29 @@ interface ThemeContextValue {
   toggleTheme: () => void;
 }
 
-// The angle-bracket type parameter tells TS what shape the context value has.
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-// === PROVIDER COMPONENT =======================================================
-// The Provider wraps the part of the tree that needs access to the context value.
-// Usually placed high in the tree (App.tsx) so everything beneath can read it.
+// ── Step 2: provide a value (DEFINITION) ──────────────────────────────────────
+// PURPOSE: ThemeProvider owns the actual state and writes it into the channel via
+// `value`. `children` is whatever JSX gets nested inside it at the call site —
+// React fills that parameter in automatically (same prop you saw with <Card> in §03).
+//
+// This component renders nothing of its own — it wraps `children` and exposes
+// the context value to them. It's plumbing, not visual.
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const [theme, setTheme] = useState<Theme>("light");
 
   function toggleTheme() {
-    setTheme(prev => (prev === "light" ? "dark" : "light"));
+    // React supplies `prev` — the current slot value at the moment React runs
+    // this updater. (Same functional updater form as §03; safe with batched updates.)
+    setTheme((prev) => (prev === "light" ? "dark" : "light"));
   }
 
-  // The `value` prop is what useContext returns in any child.
+  // FOOTGUN: this object literal is rebuilt on every ThemeProvider render, so
+  // `value` is a new reference each time — which re-renders every consumer even
+  // if theme didn't change. Fine here (toggles are rare). For a hot-path value
+  // you'd useMemo the object. Worth knowing; not worth fixing in this example.
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme }}>
       {children}
@@ -53,26 +87,32 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-// === CUSTOM HOOK: CONSUMING THE CONTEXT =======================================
-// Wrapping useContext in a custom hook achieves two things:
-//   1. Gives a clear name: useTheme() vs useContext(ThemeContext)
-//   2. Handles the null guard in one place — every consumer gets the safety check
+// ── Step 3: wrap in a named hook (DEFINITION) ─────────────────────────────────
+// PURPOSE: two reasons to wrap useContext in useTheme:
+//   1. A real name at the call site: useTheme() reads better than useContext(ThemeContext)
+//   2. The null guard lives in ONE place — every consumer gets the safety check
+// The guard turns a silent "undefined is not an object" deep in render into a
+// loud, accurate error at the boundary.
 
 function useTheme(): ThemeContextValue {
   const ctx = useContext(ThemeContext);
   if (!ctx) {
-    // This is a programming error: useTheme called outside a ThemeProvider.
-    // Throw at dev time so it's caught immediately.
+    // Only reached when useTheme() is called OUTSIDE a ThemeProvider — a wiring
+    // bug, not a runtime condition. Throw so it surfaces immediately in dev.
     throw new Error("useTheme must be used inside ThemeProvider");
   }
   return ctx;
 }
 
-// === CONSUMING THE CONTEXT ====================================================
-// Any component in the tree (at any depth) can call useTheme().
-// No need to thread the theme down as a prop through every intermediate component.
+// ── Step 4: two unrelated consumers (DEFINITIONS) ─────────────────────────────
+// PURPOSE: both components read the theme via useTheme() at any depth. Neither
+// takes `theme` as a prop — that's the whole point. The value comes from the
+// Provider's slot, not from the parent's call site.
 
 function ThemeToggle() {
+  // CALL SITE — reads the ancestor's slot. Renders: a button whose label shows
+  // the current theme; clicking it calls toggleTheme, which flips the Provider's
+  // state, which re-renders every consumer (this button AND the bubble below).
   const { theme, toggleTheme } = useTheme();
   return (
     <button onClick={toggleTheme}>
@@ -82,8 +122,10 @@ function ThemeToggle() {
 }
 
 function MessageBubble({ content }: { content: string }) {
+  // CALL SITE — same slot, different consumer. Renders: a rounded chat bubble
+  // whose colours are derived from `theme`. It needs the theme but is nowhere
+  // near the Provider in the tree — the case Context exists for.
   const { theme } = useTheme();
-  // Reads theme directly — its parent doesn't need to pass theme as a prop.
   const bg = theme === "light" ? "#e5e7eb" : "#374151";
   const color = theme === "light" ? "#111827" : "#f9fafb";
   return (
@@ -93,9 +135,11 @@ function MessageBubble({ content }: { content: string }) {
   );
 }
 
-// === PUTTING IT TOGETHER ======================================================
-// The Provider wraps both children. Neither ThemeToggle nor MessageBubble
-// receives `theme` as a prop — they read it from Context.
+// ── Putting it together (CALL SITES) ──────────────────────────────────────────
+// PURPOSE: ThemeProvider wraps both ThemeToggle and MessageBubble, so both are
+// inside its subtree and both useTheme() calls resolve to its value. One click
+// restyles both at once. Move either child OUTSIDE the Provider and its
+// useTheme() would hit the null default and throw — the boundary, made visible.
 
 export function ThemeDemo() {
   return (

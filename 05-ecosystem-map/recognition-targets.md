@@ -73,6 +73,8 @@ export default async function ChatPage() {
 
 **The solution:** Server Components run only on the server and send pre-rendered HTML (or a serialised component tree) to the browser. Their code never ships to the client.
 
+This is the README's **server/client axis made into a per-component decision**: each component is pinned to one side of that boundary, and `"use client"` is how you move it to the browser side. Everything below follows from *where the code runs*.
+
 ```
 ┌──────────────────────────────────────────────────────────┐
 │  SERVER                                                   │

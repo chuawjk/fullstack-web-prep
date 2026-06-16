@@ -2,6 +2,8 @@
 
 A realistic `package.json` for a Next.js + TypeScript full-stack app, walked line by line. This is the kind of file you'll encounter in a real repo and should be able to read without confusion.
 
+**Read it through the README's grid:** for every line below, ask *"build time or runtime?"* The answer predicts which block it lives in — runtime tools in `dependencies`, build-time-only tools in `devDependencies` — and the section split (`@prisma/client` vs `prisma`) is that same question splitting one product across both blocks.
+
 ---
 
 ```jsonc
